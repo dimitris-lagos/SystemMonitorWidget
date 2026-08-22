@@ -238,8 +238,8 @@ namespace VegaDesktopWidget
         private readonly WidgetConfig config; private readonly List<SensorReading> readings; private readonly List<SensorChoice> choices;
         private readonly DashboardCanvas canvas = new DashboardCanvas(); private readonly SplitContainer split = new SplitContainer(); private readonly ComboBox layoutChoice = new ComboBox(), sensorChoice = new ComboBox(), typeChoice = new ComboBox();
         private readonly TextBox displayName = new TextBox(); private readonly NumericUpDown dashboardRows = Number(4, 30, 14), row = Number(1, 30, 1), column = Number(1, 4, 1), columnSpan = Number(1, 4, 1), graphMin = Number(-100000, 100000, 0), graphMax = Number(-100000, 100000, 100);
-        private readonly CheckBox extrema = new CheckBox(); private readonly NumericUpDown[] thresholds = new NumericUpDown[4]; private readonly Button[] colorButtons = new Button[5];
-        private readonly Label placementStatus = new Label(); private bool loading; private int editorColumns = 4;
+        private readonly CheckBox extrema = new CheckBox(), showUnit = new CheckBox(); private readonly NumericUpDown[] thresholds = new NumericUpDown[4]; private readonly Button[] colorButtons = new Button[5];
+        private readonly ComboBox valueDecimals = new ComboBox(); private readonly Label formatPreview = new Label(), placementStatus = new Label(); private bool loading; private int editorColumns = 4;
 
         public DashboardEditorControl(WidgetConfig working, List<SensorReading> available)
         {
@@ -281,6 +281,9 @@ namespace VegaDesktopWidget
             AddRow(table, "Display name", displayName); displayName.MaxLength = 36;
             sensorChoice.DropDownStyle = ComboBoxStyle.DropDown; sensorChoice.AutoCompleteMode = AutoCompleteMode.SuggestAppend; sensorChoice.AutoCompleteSource = AutoCompleteSource.ListItems; sensorChoice.DropDownWidth = 850; foreach (SensorChoice choice in choices) sensorChoice.Items.Add(choice); AddRow(table, "Sensor", sensorChoice);
             typeChoice.DropDownStyle = ComboBoxStyle.DropDownList; typeChoice.Items.AddRange(new object[] { "Big metric", "Horizontal spec", "Vertical spec", "Graph", "Section heading" }); AddRow(table, "Box type", typeChoice);
+            Heading(table, "VALUE FORMAT"); valueDecimals.DropDownStyle = ComboBoxStyle.DropDownList; valueDecimals.Items.AddRange(new object[] { "Automatic", "0 decimals", "1 decimal", "2 decimals" }); AddRow(table, "Decimals", valueDecimals);
+            showUnit.Text = "Show sensor unit"; showUnit.AutoSize = true; AddRow(table, "Unit", showUnit);
+            formatPreview.AutoSize = true; formatPreview.Font = new Font("Segoe UI", 10f, FontStyle.Bold); formatPreview.ForeColor = Color.FromArgb(45, 112, 190); AddRow(table, "Preview", formatPreview);
             Heading(table, "POSITION & SIZE"); AddRow(table, "Column", column); AddRow(table, "Half-row", row); AddRow(table, "Width (cells)", columnSpan);
             extrema.Text = "Show minimum / maximum"; extrema.AutoSize = true; AddRow(table, "", extrema);
             Heading(table, "GRAPH RANGE"); AddRow(table, "Minimum", graphMin); AddRow(table, "Maximum", graphMax);
@@ -298,6 +301,7 @@ namespace VegaDesktopWidget
             displayName.TextChanged += delegate { PropertyChanged(); }; sensorChoice.SelectedIndexChanged += delegate { PropertyChanged(); }; typeChoice.SelectedIndexChanged += delegate { TypeChanged(); };
             row.ValueChanged += delegate { PositionChanged(); }; column.ValueChanged += delegate { PositionChanged(); }; columnSpan.ValueChanged += delegate { PositionChanged(); };
             extrema.CheckedChanged += delegate { PropertyChanged(); }; graphMin.ValueChanged += delegate { PropertyChanged(); }; graphMax.ValueChanged += delegate { PropertyChanged(); };
+            valueDecimals.SelectedIndexChanged += delegate { PropertyChanged(); }; showUnit.CheckedChanged += delegate { PropertyChanged(); };
             return panel;
         }
 
@@ -348,15 +352,16 @@ namespace VegaDesktopWidget
         private void LoadSelected()
         {
             loading = true; DashboardItem item = canvas.SelectedItem; bool enabled = item != null;
-            displayName.Enabled = sensorChoice.Enabled = typeChoice.Enabled = row.Enabled = column.Enabled = columnSpan.Enabled = extrema.Enabled = graphMin.Enabled = graphMax.Enabled = enabled;
+            displayName.Enabled = sensorChoice.Enabled = typeChoice.Enabled = row.Enabled = column.Enabled = columnSpan.Enabled = extrema.Enabled = graphMin.Enabled = graphMax.Enabled = valueDecimals.Enabled = showUnit.Enabled = enabled;
             foreach (NumericUpDown threshold in thresholds) if (threshold != null) threshold.Enabled = enabled;
             foreach (Button button in colorButtons) if (button != null) button.Enabled = enabled;
-            if (!enabled) { displayName.Text = ""; placementStatus.Text = "Select a component or click + Add."; loading = false; return; }
+            if (!enabled) { displayName.Text = ""; formatPreview.Text = "—"; placementStatus.Text = "Select a component or click + Add."; loading = false; return; }
             displayName.Text = item.DisplayName; typeChoice.SelectedIndex = (int)item.BoxType; row.Value = Clamp(row, item.Row + 1); column.Value = Clamp(column, item.Column + 1); columnSpan.Value = Clamp(columnSpan, item.ColumnSpan); extrema.Checked = item.ShowExtrema;
             graphMin.Value = Clamp(graphMin, (decimal)item.GraphMinimum); graphMax.Value = Clamp(graphMax, (decimal)item.GraphMaximum);
+            valueDecimals.SelectedIndex = Math.Max(0, Math.Min(3, item.ValueDecimals + 1)); showUnit.Checked = item.ShowUnit;
             SelectSensor(item); for (int i = 0; i < 4; i++) thresholds[i].Value = Clamp(thresholds[i], (decimal)item.Thresholds[i]);
             for (int i = 0; i < 5; i++) SetColorButton(i, Color.FromArgb(item.Colors[i]));
-            UpdateVisibility(item); placementStatus.Text = ""; loading = false;
+            UpdateVisibility(item); UpdateFormatPreview(item); placementStatus.Text = ""; loading = false;
         }
 
         private void SelectSensor(DashboardItem item)
@@ -393,6 +398,7 @@ namespace VegaDesktopWidget
             for (int i = 0; i < 4; i++) item.Thresholds[i] = (double)thresholds[i].Value;
             SensorChoice choice = sensorChoice.SelectedItem as SensorChoice;
             if (choice != null && item.BoxType != DashboardBoxType.Section) { item.SensorKey = choice.Key; item.SensorLabel = choice.Label; item.SensorName = choice.SensorName; }
+            item.ValueDecimals = Math.Max(-1, valueDecimals.SelectedIndex - 1); item.ShowUnit = showUnit.Checked; UpdateFormatPreview(item);
             canvas.Invalidate();
         }
 
@@ -403,9 +409,15 @@ namespace VegaDesktopWidget
 
         private void UpdateVisibility(DashboardItem item)
         {
-            bool graph = item.BoxType == DashboardBoxType.Graph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = graph || item.BoxType == DashboardBoxType.Section; extrema.Enabled = item.BoxType == DashboardBoxType.Big; sensorChoice.Enabled = item.BoxType != DashboardBoxType.Section;
+            bool section = item.BoxType == DashboardBoxType.Section, graph = item.BoxType == DashboardBoxType.Graph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = graph || section; extrema.Enabled = item.BoxType == DashboardBoxType.Big; sensorChoice.Enabled = valueDecimals.Enabled = showUnit.Enabled = !section;
         }
 
+        private void UpdateFormatPreview(DashboardItem item)
+        {
+            if (item == null || item.BoxType == DashboardBoxType.Section) { formatPreview.Text = "—"; return; }
+            if (item.SensorKey == "__RAM_USED__") { formatPreview.Text = SensorValueFormatter.FormatValue(6.3, "GB", item.ValueDecimals, item.ShowUnit); return; }
+            SensorChoice choice = sensorChoice.SelectedItem as SensorChoice; formatPreview.Text = SensorValueFormatter.FormatReading(choice == null ? null : choice.Reading, item.ValueDecimals, item.ShowUnit);
+        }
         private List<DashboardItem> CurrentItems() { return editorColumns == 3 ? config.Dashboard3 : config.Dashboard4; }
         private static Button ButtonFor(string text, int x) { Button button = new Button(); button.Text = text; button.Location = new Point(x, 9); button.Size = new Size(text == "Reset layout" ? 108 : 92, 29); return button; }
         private static NumericUpDown Number(decimal minimum, decimal maximum, decimal value) { NumericUpDown control = new NumericUpDown(); control.Minimum = minimum; control.Maximum = maximum; control.DecimalPlaces = minimum < 0 || maximum > 1000 ? 2 : 0; control.Value = Math.Max(minimum, Math.Min(maximum, value)); control.Width = 115; return control; }

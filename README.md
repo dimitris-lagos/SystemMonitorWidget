@@ -16,11 +16,13 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 
 - Fully configurable 3-column and 4-column dashboards.
 - Optional top-three process strip: hide it, rank by CPU, or rank by RAM while showing aggregated CPU and memory usage.
+- Editable, version-aware header title with compact Windows system uptime.
 - Search and add every sensor exposed through HWiNFO shared memory by label, device, unit, or sensor type.
 - Five reusable component types: Big metric, Horizontal spec, Vertical spec, Graph, and Section.
 - Drag-and-drop placement with grid snapping and overlap prevention.
 - Precise column, half-row, width, and dashboard-height controls.
 - Custom display name for every component.
+- Per-component value formatting with automatic, 0-, 1-, or 2-decimal precision, unit visibility, and a live preview.
 - Five colors and four change thresholds, configured independently per component.
 - Fixed minimum and maximum for every graph.
 - Optional recorded minimum and maximum on Big metric components.
@@ -54,7 +56,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The compiled executable is written to `artifacts\SystemMonitorWidget-v2.2.exe`.
+The compiled executable is written to `artifacts\SystemMonitorWidget-v2.3.exe`.
 
 ## Local data
 
@@ -62,8 +64,8 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.2.exe` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.3.exe` from the [latest release](../../releases/latest).
 2. Open HWiNFO64 settings and enable **Shared Memory Support**.
 3. Start HWiNFO sensors.
-4. Run `SystemMonitorWidget-v2.2.exe`.
+4. Run `SystemMonitorWidget-v2.3.exe`.
 5. Right-click the widget and choose **Configure dashboard** to add sensors, select component types, arrange the grid, and customize colors.

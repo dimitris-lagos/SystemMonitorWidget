@@ -4,7 +4,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $source = Join-Path $root 'src'
 $output = Join-Path $root 'artifacts'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$executable = Join-Path $output 'SystemMonitorWidget-v2.2.exe'
+$executable = Join-Path $output 'SystemMonitorWidget-v2.3.exe'
 
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw "C# compiler not found at $compiler"

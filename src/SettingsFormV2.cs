@@ -11,6 +11,7 @@ namespace VegaDesktopWidget
         private static readonly int[] ScaleModes = new int[] { 100, 75, 67, 50, 33, 25 };
         private CheckBox topmost, graphs, startup, launchHwinfo;
         private NumericUpDown width, opacity, refresh;
+        private TextBox headerTitle;
         private ComboBox uiScale, gridLayout;
         private DashboardEditorControl dashboardEditor;
         public WidgetConfig Result { get { return working; } }
@@ -39,6 +40,7 @@ namespace VegaDesktopWidget
             TableLayoutPanel table = new TableLayoutPanel(); table.Dock = DockStyle.Top; table.AutoSize = true; table.ColumnCount = 2;
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 245)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             AddHeading(table, "Desktop behavior");
+            headerTitle = AddText(table, "Header title", "Editable title shown on the widget.", working.HeaderTitle, 48);
             topmost = AddCheck(table, "Always on top", "Keep the monitor above normal windows.", working.AlwaysOnTop);
             graphs = AddCheck(table, "Live history graphs", "Draw graph history for graph components.", working.ShowGraphs);
             launchHwinfo = AddCheck(table, "Start HWiNFO if needed", "Use HWiNFO's saved Sensors-only and Auto Start settings.", working.LaunchHWiNFO);
@@ -64,6 +66,7 @@ namespace VegaDesktopWidget
             {
                 string error; if (!dashboardEditor.ValidateDashboard(out error)) { MessageBox.Show(this, error, "Dashboard configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 working.AlwaysOnTop = topmost.Checked; working.ShowGraphs = graphs.Checked; working.LaunchHWiNFO = launchHwinfo.Checked;
+                working.HeaderTitle = WidgetConfig.NormalizeHeaderTitle(headerTitle.Text);
                 working.UiScaleMode = ScaleModes[Math.Max(0, uiScale.SelectedIndex)]; working.GridColumns = gridLayout.SelectedIndex == 0 ? 3 : 4;
                 working.Width = (int)width.Value; working.OpacityPercent = (int)opacity.Value; working.RefreshMilliseconds = (int)refresh.Value;
                 WidgetConfig.SetStartup(startup.Checked); working.Save(); DialogResult = DialogResult.OK; Close();
@@ -83,6 +86,13 @@ namespace VegaDesktopWidget
             table.Controls.Add(name); table.Controls.Add(control); return control;
         }
 
+        private static TextBox AddText(TableLayoutPanel table, string label, string description, string value, int maximumLength)
+        {
+            Label name = NameLabel(label); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
+            TextBox control = new TextBox(); control.Text = value ?? ""; control.MaxLength = maximumLength; control.Width = 285;
+            Label hint = new Label(); hint.Text = description; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
+            panel.Controls.Add(control); panel.Controls.Add(hint); table.Controls.Add(name); table.Controls.Add(panel); return control;
+        }
         private static NumericUpDown AddNumber(TableLayoutPanel table, string label, string description, int value, int minimum, int maximum, int increment)
         {
             Label name = NameLabel(label); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
@@ -112,7 +122,7 @@ namespace VegaDesktopWidget
 
         private static WidgetConfig Clone(WidgetConfig source)
         {
-            WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns;
+            WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
             copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO;
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();

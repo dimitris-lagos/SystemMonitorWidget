@@ -24,6 +24,8 @@ namespace VegaDesktopWidget
         public double GraphMaximum = 100;
         public double[] Thresholds = new double[] { 20, 40, 60, 80 };
         public int[] Colors = ActivityColors();
+        public int ValueDecimals = -1;
+        public bool ShowUnit = true;
 
         public DashboardItem Clone()
         {
@@ -54,7 +56,7 @@ namespace VegaDesktopWidget
                 Escape(Id), BoxType.ToString(), Escape(SensorKey), Escape(SensorLabel), Escape(SensorName), Escape(DisplayName),
                 Column.ToString(CultureInfo.InvariantCulture), Row.ToString(CultureInfo.InvariantCulture), ColumnSpan.ToString(CultureInfo.InvariantCulture), RowSpan.ToString(CultureInfo.InvariantCulture),
                 ShowExtrema.ToString(), GraphMinimum.ToString("R", CultureInfo.InvariantCulture), GraphMaximum.ToString("R", CultureInfo.InvariantCulture),
-                JoinDoubles(Thresholds), JoinInts(Colors)
+                JoinDoubles(Thresholds), JoinInts(Colors), ValueDecimals.ToString(CultureInfo.InvariantCulture), ShowUnit.ToString()
             });
         }
 
@@ -76,6 +78,8 @@ namespace VegaDesktopWidget
             if (Double.TryParse(p[12], NumberStyles.Float, CultureInfo.InvariantCulture, out d)) item.GraphMaximum = d;
             item.Thresholds = ParseDoubles(p[13], new double[] { 20, 40, 60, 80 });
             item.Colors = ParseInts(p[14], ActivityColors());
+            if (p.Length > 15 && Int32.TryParse(p[15], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) item.ValueDecimals = Math.Max(-1, Math.Min(2, n));
+            if (p.Length > 16 && Boolean.TryParse(p[16], out flag)) item.ShowUnit = flag;
             if (item.Id.Length == 0) item.Id = Guid.NewGuid().ToString("N");
             return item;
         }
@@ -122,6 +126,31 @@ namespace VegaDesktopWidget
         }
     }
 
+    internal static class SensorValueFormatter
+    {
+        public static string FormatReading(SensorReading reading, int decimals, bool showUnit)
+        {
+            return reading == null || Double.IsNaN(reading.Value) || Double.IsInfinity(reading.Value) ? "—" : FormatValue(reading.Value, reading.Unit, decimals, showUnit);
+        }
+
+        public static string FormatValue(double value, string unit, int decimals, bool showUnit)
+        {
+            string sourceUnit = (unit ?? "").Trim(), displayUnit = sourceUnit; double displayValue = value; int automaticDecimals;
+            if (sourceUnit.Equals("°C", StringComparison.OrdinalIgnoreCase)) { displayUnit = "°"; automaticDecimals = 0; }
+            else if (sourceUnit == "%") automaticDecimals = 0;
+            else if (sourceUnit.Equals("MHz", StringComparison.OrdinalIgnoreCase) && value >= 1000) { displayValue = value / 1000.0; displayUnit = "GHz"; automaticDecimals = 2; }
+            else if (sourceUnit.Equals("MHz", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 0;
+            else if (sourceUnit.Equals("MB", StringComparison.OrdinalIgnoreCase) && value >= 1024) { displayValue = value / 1024.0; displayUnit = "GB"; automaticDecimals = 1; }
+            else if (sourceUnit.Equals("GB", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 1;
+            else if (sourceUnit == "W") automaticDecimals = value < 100 ? 1 : 0;
+            else if (sourceUnit.Equals("RPM", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 0;
+            else automaticDecimals = Math.Abs(value) < 10 ? 2 : 0;
+            int places = decimals < 0 ? automaticDecimals : Math.Max(0, Math.Min(2, decimals));
+            string number = displayValue.ToString(places == 0 ? "0" : places == 1 ? "0.0" : "0.00", CultureInfo.InvariantCulture);
+            if (!showUnit || displayUnit.Length == 0) return number;
+            return number + (displayUnit == "%" || displayUnit == "°" ? displayUnit : " " + displayUnit);
+        }
+    }
     internal static class DashboardDefaults
     {
         public const int Rows = 14;

@@ -5,12 +5,15 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace VegaDesktopWidget
 {
     internal sealed class WidgetForm : Form
     {
+        [DllImport("kernel32.dll")]
+        private static extern ulong GetTickCount64();
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
         private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
@@ -111,12 +114,19 @@ namespace VegaDesktopWidget
         private void DrawHeader(Graphics g)
         {
             using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(1, 1, CanvasWidth - 2, 54), Color.FromArgb(31, 39, 51), Color.FromArgb(21, 27, 36), 90f)) g.FillRectangle(b, 1, 1, CanvasWidth - 2, 54);
-            DrawText(g, "SYSTEM MONITOR", 16, FontStyle.Bold, Color.White, new RectangleF(16, 10, CanvasWidth - 150, 24), StringAlignment.Near);
+            DrawTextFit(g, config.HeaderTitle, 13.5f, 9f, FontStyle.Bold, Color.White, new RectangleF(16, 10, CanvasWidth - 150, 24), StringAlignment.Near);
             bool live = readings.Count > 0; using (SolidBrush dot = new SolidBrush(live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77))) g.FillEllipse(dot, CanvasWidth - 112, 17, 8, 8);
-            DrawText(g, live ? "HWiNFO LIVE" : "HWiNFO WAIT", 8, FontStyle.Bold, live ? Color.FromArgb(126, 230, 163) : Color.FromArgb(255, 199, 102), new RectangleF(CanvasWidth - 98, 12, 86, 18), StringAlignment.Far);
+            DrawText(g, FormatSystemUptime(), 8, FontStyle.Bold, Color.FromArgb(180, 194, 210), new RectangleF(CanvasWidth - 98, 12, 86, 18), StringAlignment.Far);
             DrawProcessStrip(g, new RectangleF(12, 34, CanvasWidth - 24, 14));
         }
 
+        private static string FormatSystemUptime()
+        {
+            TimeSpan uptime = TimeSpan.FromMilliseconds(GetTickCount64());
+            if (uptime.TotalDays >= 1) return "UP " + (int)uptime.TotalDays + "d " + uptime.Hours + "h";
+            if (uptime.TotalHours >= 1) return "UP " + (int)uptime.TotalHours + "h " + uptime.Minutes + "m";
+            return "UP " + Math.Max(0, uptime.Minutes) + "m";
+        }
         private void DrawProcessStrip(Graphics g, RectangleF area)
         {
             if (config.ProcessStripMode == 0) return;
@@ -130,7 +140,7 @@ namespace VegaDesktopWidget
             for (int i = 0; i < count; i++)
             {
                 RectangleF cell = new RectangleF(area.X + i * cellWidth + 3, area.Y, cellWidth - 6, area.Height);
-                DrawTextFit(g, topProcesses[i].CompactText, 7f, 5.5f, FontStyle.Bold, Color.FromArgb(173, 188, 207), cell, StringAlignment.Center);
+                DrawTextFit(g, topProcesses[i].CompactText, 8.2f, 6.25f, FontStyle.Bold, Color.FromArgb(173, 188, 207), cell, StringAlignment.Center);
                 if (i < count - 1) using (SolidBrush dot = new SolidBrush(Color.FromArgb(64, 183, 255))) g.FillEllipse(dot, area.X + (i + 1) * cellWidth - 1.5f, area.Y + 6f, 3f, 3f);
             }
         }
@@ -156,7 +166,7 @@ namespace VegaDesktopWidget
                 if (item.BoxType == DashboardBoxType.Section) { DrawSection(g, r, item); continue; }
                 SensorReading reading = Resolve(item); double? raw = ItemValue(item);
                 Color color = raw.HasValue ? item.ColorFor(raw.Value) : Color.FromArgb(85, 96, 110);
-                string value = item.SensorKey == "__RAM_USED__" ? (ramAvailable ? ramUsed.ToString("0.0", CultureInfo.InvariantCulture) + " GB" : "—") : Format(reading);
+                string value = item.SensorKey == "__RAM_USED__" ? (ramAvailable ? SensorValueFormatter.FormatValue(ramUsed, "GB", item.ValueDecimals, item.ShowUnit) : "—") : SensorValueFormatter.FormatReading(reading, item.ValueDecimals, item.ShowUnit);
                 string label = String.IsNullOrWhiteSpace(item.DisplayName) ? (reading == null ? "UNASSIGNED" : reading.Label.ToUpperInvariant()) : item.DisplayName.Trim().ToUpperInvariant();
                 if (item.BoxType == DashboardBoxType.Big)
                 {
@@ -169,7 +179,7 @@ namespace VegaDesktopWidget
                 else if (item.BoxType == DashboardBoxType.Graph)
                 {
                     List<double> values = null; if (config.ShowGraphs) history.TryGetValue(item.Id, out values);
-                    string unit = reading == null || reading.Unit == null ? "" : reading.Unit.Trim();
+                    string unit = !item.ShowUnit || reading == null || reading.Unit == null ? "" : reading.Unit.Trim();
                     string range = FormatRange(item.GraphMinimum, item.GraphMaximum, unit);
                     components.DrawGraphBox(g, r, label, value, range, color, values, item.GraphMinimum, item.GraphMaximum);
                 }
@@ -201,27 +211,14 @@ namespace VegaDesktopWidget
         private string FormatExtrema(DashboardItem item, SensorReading reading, MetricExtrema range, bool maximum)
         {
             if (range == null || !range.HasValue) return "—"; double value = maximum ? range.Maximum : range.Minimum;
-            if (item.SensorKey == "__RAM_USED__") return value.ToString("0.0", CultureInfo.InvariantCulture) + " GB";
-            return FormatValue(value, reading == null ? "" : reading.Unit);
+            if (item.SensorKey == "__RAM_USED__") return SensorValueFormatter.FormatValue(value, "GB", item.ValueDecimals, item.ShowUnit);
+            return SensorValueFormatter.FormatValue(value, reading == null ? "" : reading.Unit, item.ValueDecimals, item.ShowUnit);
         }
 
         private static string FormatRange(double minimum, double maximum, string unit)
         {
             string suffix = String.IsNullOrWhiteSpace(unit) ? "" : " " + unit.Trim();
             return minimum.ToString("0.##", CultureInfo.InvariantCulture) + "–" + maximum.ToString("0.##", CultureInfo.InvariantCulture) + suffix;
-        }
-
-        private static string Format(SensorReading reading) { return reading == null || Double.IsNaN(reading.Value) || Double.IsInfinity(reading.Value) ? "—" : FormatValue(reading.Value, reading.Unit); }
-        private static string FormatValue(double value, string unit)
-        {
-            string u = unit == null ? "" : unit.Trim();
-            if (u.Equals("°C", StringComparison.OrdinalIgnoreCase)) return Math.Round(value).ToString("0") + "°";
-            if (u == "%") return Math.Round(value).ToString("0") + "%";
-            if (u.Equals("MHz", StringComparison.OrdinalIgnoreCase)) return value >= 1000 ? (value / 1000.0).ToString("0.00", CultureInfo.InvariantCulture) + " GHz" : Math.Round(value).ToString("0") + " MHz";
-            if (u.Equals("MB", StringComparison.OrdinalIgnoreCase) && value >= 1024) return (value / 1024.0).ToString("0.0", CultureInfo.InvariantCulture) + " GB";
-            if (u == "W") return value.ToString(value < 100 ? "0.0" : "0", CultureInfo.InvariantCulture) + " W";
-            if (u == "RPM") return Math.Round(value).ToString("0") + " RPM";
-            return value.ToString(Math.Abs(value) < 10 ? "0.00" : "0", CultureInfo.InvariantCulture) + (u.Length > 0 ? " " + u : "");
         }
 
         private static void DrawText(Graphics g, string text, float size, FontStyle style, Color color, RectangleF area, StringAlignment align)

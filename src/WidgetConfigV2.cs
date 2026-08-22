@@ -8,8 +8,10 @@ namespace VegaDesktopWidget
 {
     internal sealed class WidgetConfig
     {
+        public static string DefaultHeaderTitle { get { Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version; return "SYSTEM MONITOR v" + version.Major + "." + version.Minor; } }
         public int Left = 60, Top = 60, Width = 370, UiScaleMode = 100, GridColumns = 4, RefreshMilliseconds = 1000, OpacityPercent = 96;
         public int ProcessStripMode = 2;
+        public string HeaderTitle = DefaultHeaderTitle;
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
         public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false;
         public Dictionary<string, string> RoleKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -40,6 +42,7 @@ namespace VegaDesktopWidget
                 else if (k.Equals("RefreshMilliseconds", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.RefreshMilliseconds = Math.Max(500, Math.Min(5000, n));
                 else if (k.Equals("OpacityPercent", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.OpacityPercent = Math.Max(65, Math.Min(100, n));
                 else if (k.Equals("ProcessStripMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && n >= 0 && n <= 2) c.ProcessStripMode = n;
+                else if (k.Equals("HeaderTitle", StringComparison.OrdinalIgnoreCase)) { string title = NormalizeHeaderTitle(v); c.HeaderTitle = IsVersionedDefaultHeaderTitle(title) ? DefaultHeaderTitle : title; }
                 else if (k.Equals("CpuGraphMin", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.CpuGraphMin = Math.Max(0, n);
                 else if (k.Equals("CpuGraphMax", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.CpuGraphMax = Math.Max(1, n);
                 else if (k.Equals("GpuGraphMin", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.GpuGraphMin = Math.Max(0, n);
@@ -67,6 +70,7 @@ namespace VegaDesktopWidget
             l.Add("Left=" + Left.ToString(CultureInfo.InvariantCulture)); l.Add("Top=" + Top.ToString(CultureInfo.InvariantCulture)); l.Add("Width=" + Width.ToString(CultureInfo.InvariantCulture)); l.Add("UiScaleMode=" + UiScaleMode.ToString(CultureInfo.InvariantCulture)); l.Add("GridColumns=" + GridColumns.ToString(CultureInfo.InvariantCulture));
             l.Add("RefreshMilliseconds=" + RefreshMilliseconds.ToString(CultureInfo.InvariantCulture)); l.Add("OpacityPercent=" + OpacityPercent.ToString(CultureInfo.InvariantCulture));
             l.Add("ProcessStripMode=" + ProcessStripMode.ToString(CultureInfo.InvariantCulture));
+            l.Add("HeaderTitle=" + NormalizeHeaderTitle(HeaderTitle));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
             l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO);
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);
@@ -78,6 +82,8 @@ namespace VegaDesktopWidget
         }
         public List<DashboardItem> ActiveDashboard { get { return GridColumns == 3 ? Dashboard3 : Dashboard4; } }
         public int ActiveDashboardRows { get { return GridColumns == 3 ? DashboardRows3 : DashboardRows4; } }
+        public static string NormalizeHeaderTitle(string value) { string title = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim(); if (title.Length == 0) return DefaultHeaderTitle; return title.Length > 48 ? title.Substring(0, 48) : title; }
+        private static bool IsVersionedDefaultHeaderTitle(string value) { Version version; const string prefix = "SYSTEM MONITOR v"; return value != null && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && Version.TryParse(value.Substring(prefix.Length), out version); }
         public void SetDashboardRows(int columns, int rows) { if (columns == 3) DashboardRows3 = rows; else DashboardRows4 = rows; }
         public static bool IsStartupEnabled() { using (RegistryKey k = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", false)) return k != null && k.GetValue("VegaDesktopWidget") != null; }
         public static void SetStartup(bool enabled) { using (RegistryKey k = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")) { if (enabled) k.SetValue("VegaDesktopWidget", "\"" + System.Windows.Forms.Application.ExecutablePath + "\""); else k.DeleteValue("VegaDesktopWidget", false); } }
