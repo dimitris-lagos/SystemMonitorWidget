@@ -57,7 +57,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The compiled executable is written to `artifacts\SystemMonitorWidget-v2.4.exe`.
+The compiled executable is written to `artifacts\SystemMonitorWidget-v2.4.1.exe`.
 
 ## Local data
 
@@ -65,8 +65,8 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.4.exe` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.4.1.exe` from the [latest release](../../releases/latest).
 2. Open HWiNFO64 settings and enable **Shared Memory Support**.
 3. Start HWiNFO sensors.
-4. Run `SystemMonitorWidget-v2.4.exe`.
+4. Run `SystemMonitorWidget-v2.4.1.exe`.
 5. Select the header gear and choose **Configure dashboard** to add sensors, select component types, arrange the grid, customize colors, and format each value.

@@ -10,6 +10,38 @@ using System.Windows.Forms;
 
 namespace VegaDesktopWidget
 {
+    internal sealed class GearButtonForm : Form
+    {
+        private bool live;
+        public event EventHandler Pressed;
+
+        public GearButtonForm()
+        {
+            FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; StartPosition = FormStartPosition.Manual; DoubleBuffered = true;
+            BackColor = Color.FromArgb(23, 30, 39); Cursor = Cursors.Hand;
+            MouseDown += delegate(object sender, MouseEventArgs e) { if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right) { EventHandler handler = Pressed; if (handler != null) handler(this, EventArgs.Empty); } };
+        }
+
+        public void SetLive(bool value) { if (live == value) return; live = value; Invalidate(); }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e); if (Width <= 0 || Height <= 0) return;
+            using (GraphicsPath path = new GraphicsPath()) { path.AddEllipse(ClientRectangle); Region = new Region(path); }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            Color accent = live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77);
+            using (SolidBrush background = new SolidBrush(Color.FromArgb(23, 30, 39))) e.Graphics.FillEllipse(background, r);
+            using (Pen border = new Pen(Color.FromArgb(155, accent), 1f)) e.Graphics.DrawEllipse(border, r.X + 0.5f, r.Y + 0.5f, r.Width - 1f, r.Height - 1f);
+            using (Font font = new Font("Segoe UI Symbol", Math.Max(8f, 11f * Width / 20f), FontStyle.Regular, GraphicsUnit.Point))
+            using (SolidBrush brush = new SolidBrush(accent))
+            using (StringFormat format = new StringFormat()) { format.Alignment = StringAlignment.Center; format.LineAlignment = StringAlignment.Center; e.Graphics.DrawString("\u2699", font, brush, ClientRectangle, format); }
+        }
+    }
+
     internal sealed class WidgetForm : Form
     {
         [DllImport("kernel32.dll")]
@@ -26,8 +58,11 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem;
-        private const int WmNcHitTest = 0x0084, HtClient = 1, HtTransparent = -1;
+        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
+        private int lastMenuAppCloseTick = -10000;
+        private const int WmNcHitTest = 0x0084, HtTransparent = -1;
+        protected override bool ShowWithoutActivation { get { return true; } }
+        protected override CreateParams CreateParams { get { CreateParams p = base.CreateParams; p.ExStyle |= 0x20 | 0x08000000 | 0x80; return p; } }
 
         private float UiScale { get { if (config.UiScaleMode == 75) return 0.75f; if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
         private int CanvasWidth { get { return config.Width; } }
@@ -40,16 +75,17 @@ namespace VegaDesktopWidget
             ApplyWidgetSize(); Location = ClampLocation(new Point(config.Left, config.Top));
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
             BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
-            Shown += delegate { RefreshSensors(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
-            MouseDown += GearMouseDown;
+            Shown += delegate { RefreshSensors(); EnsureGearWindow(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
+            FormClosed += delegate { if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
+            LocationChanged += delegate { SyncGearWindow(); }; SizeChanged += delegate { SyncGearWindow(); }; VisibleChanged += delegate { SyncGearWindow(); };
             if (config.LaunchHWiNFO) LaunchHWiNFO();
         }
 
         private void BuildMenu()
         {
-            menu = new ContextMenuStrip(); menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
+            menu = new ContextMenuStrip(); menu.Closed += MenuClosed; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
             topmostItem = new ToolStripMenuItem("Always on top"); topmostItem.Checked = config.AlwaysOnTop;
-            topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; config.Save(); };
+            topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; SyncGearWindow(); config.Save(); };
             menu.Items.Add(topmostItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
             scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
@@ -79,7 +115,7 @@ namespace VegaDesktopWidget
                 GetExtrema(item.Id).Add(value.Value);
                 if (item.BoxType == DashboardBoxType.Graph) AddHistory(item.Id, value.Value);
             }
-            Invalidate();
+            if (gearWindow != null) gearWindow.SetLive(readings.Count > 0); Invalidate();
         }
 
         private MetricExtrema GetExtrema(string key) { MetricExtrema value; if (!extrema.TryGetValue(key, out value)) { value = new MetricExtrema(); extrema[key] = value; } return value; }
@@ -108,7 +144,7 @@ namespace VegaDesktopWidget
             base.OnPaint(e); Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit; g.ScaleTransform(UiScale, UiScale);
             Rectangle outer = new Rectangle(0, 0, CanvasWidth - 1, LogicalHeight - 1);
             using (GraphicsPath path = Rounded(outer, 14)) { using (SolidBrush b = new SolidBrush(Color.FromArgb(13, 17, 23))) g.FillPath(b, path); using (Pen p = new Pen(Color.FromArgb(48, 58, 71))) g.DrawPath(p, path); }
-            DrawHeader(g); DrawDashboard(g); g.ResetTransform(); DrawGearButton(g);
+            DrawHeader(g); DrawDashboard(g);
             using (GraphicsPath physicalPath = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Max(2, (int)Math.Round(14 * UiScale)))) Region = new Region(physicalPath);
         }
 
@@ -238,30 +274,35 @@ namespace VegaDesktopWidget
                 return new Rectangle(centerX - size / 2, centerY - size / 2, size, size);
             }
         }
-        private void DrawGearButton(Graphics g)
+        private void EnsureGearWindow()
         {
-            Rectangle r = GearBounds; bool live = readings.Count > 0; Color accent = live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77);
-            using (SolidBrush background = new SolidBrush(Color.FromArgb(175, 23, 30, 39))) g.FillEllipse(background, r);
-            using (Pen border = new Pen(Color.FromArgb(155, accent), 1f)) g.DrawEllipse(border, r.X + 0.5f, r.Y + 0.5f, r.Width - 1f, r.Height - 1f);
-            using (Font font = new Font("Segoe UI Symbol", Math.Max(8f, 11f * UiScale), FontStyle.Regular, GraphicsUnit.Point))
-            using (SolidBrush brush = new SolidBrush(accent))
-            using (StringFormat format = new StringFormat()) { format.Alignment = StringAlignment.Center; format.LineAlignment = StringAlignment.Center; g.DrawString("\u2699", font, brush, r, format); }
+            if (gearWindow != null && !gearWindow.IsDisposed) { SyncGearWindow(); return; }
+            gearWindow = new GearButtonForm(); gearWindow.Pressed += delegate { ToggleMenu(); }; gearWindow.SetLive(readings.Count > 0);
+            Rectangle r = GearBounds; gearWindow.Bounds = new Rectangle(PointToScreen(r.Location), r.Size); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.Show(this); SyncGearWindow();
         }
-        private void GearMouseDown(object sender, MouseEventArgs e)
+        private void SyncGearWindow()
         {
-            if ((e.Button == MouseButtons.Left || e.Button == MouseButtons.Right) && GearBounds.Contains(e.Location)) menu.Show(this, new Point(GearBounds.Left, GearBounds.Bottom + 2));
+            if (gearWindow == null || gearWindow.IsDisposed) return;
+            Rectangle r = GearBounds; gearWindow.Bounds = new Rectangle(PointToScreen(r.Location), r.Size); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.SetLive(readings.Count > 0);
+            if (Visible && !gearWindow.Visible) gearWindow.Show(this); else if (!Visible && gearWindow.Visible) gearWindow.Hide();
+        }
+        private void ToggleMenu()
+        {
+            if (menu.Visible) { menu.Close(ToolStripDropDownCloseReason.CloseCalled); return; }
+            int elapsed = unchecked(Environment.TickCount - lastMenuAppCloseTick); if (elapsed >= 0 && elapsed < 300) { lastMenuAppCloseTick = -10000; return; }
+            menu.Show(gearWindow, new Point(0, gearWindow.Height + 2));
+        }
+        private void MenuClosed(object sender, ToolStripDropDownClosedEventArgs e)
+        {
+            if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked) lastMenuAppCloseTick = Environment.TickCount;
         }
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WmNcHitTest)
-            {
-                int packed = unchecked((int)(long)m.LParam); Point screen = new Point((short)(packed & 0xffff), (short)((packed >> 16) & 0xffff)); Point client = PointToClient(screen);
-                m.Result = GearBounds.Contains(client) ? (IntPtr)HtClient : (IntPtr)HtTransparent; return;
-            }
+            if (m.Msg == WmNcHitTest) { m.Result = (IntPtr)HtTransparent; return; }
             base.WndProc(ref m);
         }
         private Point ClampLocation(Point p) { Rectangle work = Screen.PrimaryScreen.WorkingArea; return new Point(Math.Max(work.Left, Math.Min(work.Right - Width, p.X)), Math.Max(work.Top, Math.Min(work.Bottom - Height, p.Y))); }
-        private void ShowSettings() { using (SettingsForm form = new SettingsForm(config, readings)) { if (form.ShowDialog(this) != DialogResult.OK) return; config = form.Result; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds; topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); config.Save(); RefreshSensors(); } }
+        private void ShowSettings() { using (SettingsForm form = new SettingsForm(config, readings)) { if (form.ShowDialog(this) != DialogResult.OK) return; config = form.Result; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds; topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); RefreshSensors(); } }
         private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; string path = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE"; if (File.Exists(path)) Process.Start(path); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }
     }
 }
