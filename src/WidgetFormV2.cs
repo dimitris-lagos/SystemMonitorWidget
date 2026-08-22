@@ -14,8 +14,10 @@ namespace VegaDesktopWidget
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
         private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
+        private readonly ProcessUsageSampler processSampler = new ProcessUsageSampler();
         private WidgetConfig config;
         private List<SensorReading> readings = new List<SensorReading>();
+        private List<ProcessUsage> topProcesses = new List<ProcessUsage>();
         private readonly Dictionary<string, List<double>> history = new Dictionary<string, List<double>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MetricExtrema> extrema = new Dictionary<string, MetricExtrema>(StringComparer.OrdinalIgnoreCase);
         private readonly WidgetComponents components = new WidgetComponents();
@@ -60,7 +62,7 @@ namespace VegaDesktopWidget
 
         private void RefreshSensors()
         {
-            readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal);
+            readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal); topProcesses = processSampler.SampleTopByMemory(3);
             foreach (DashboardItem item in config.ActiveDashboard)
             {
                 if (item.BoxType == DashboardBoxType.Section) continue;
@@ -107,7 +109,36 @@ namespace VegaDesktopWidget
             DrawText(g, "SYSTEM MONITOR", 16, FontStyle.Bold, Color.White, new RectangleF(16, 10, CanvasWidth - 150, 24), StringAlignment.Near);
             bool live = readings.Count > 0; using (SolidBrush dot = new SolidBrush(live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77))) g.FillEllipse(dot, CanvasWidth - 112, 17, 8, 8);
             DrawText(g, live ? "HWiNFO LIVE" : "HWiNFO WAIT", 8, FontStyle.Bold, live ? Color.FromArgb(126, 230, 163) : Color.FromArgb(255, 199, 102), new RectangleF(CanvasWidth - 98, 12, 86, 18), StringAlignment.Far);
-            DrawText(g, live ? "Direct shared memory" : status, 7.5f, FontStyle.Regular, Color.FromArgb(135, 148, 164), new RectangleF(16, 34, CanvasWidth - 28, 14), StringAlignment.Near);
+            DrawProcessStrip(g, new RectangleF(12, 34, CanvasWidth - 24, 14));
+        }
+
+        private void DrawProcessStrip(Graphics g, RectangleF area)
+        {
+            if (topProcesses.Count == 0)
+            {
+                DrawText(g, "Collecting process activity", 7f, FontStyle.Regular, Color.FromArgb(135, 148, 164), area, StringAlignment.Near);
+                return;
+            }
+            int count = Math.Min(3, topProcesses.Count);
+            float cellWidth = area.Width / count;
+            for (int i = 0; i < count; i++)
+            {
+                RectangleF cell = new RectangleF(area.X + i * cellWidth + 3, area.Y, cellWidth - 6, area.Height);
+                DrawTextFit(g, topProcesses[i].CompactText, 7f, 5.5f, FontStyle.Bold, Color.FromArgb(173, 188, 207), cell, StringAlignment.Center);
+                if (i < count - 1) using (SolidBrush dot = new SolidBrush(Color.FromArgb(64, 183, 255))) g.FillEllipse(dot, area.X + (i + 1) * cellWidth - 1.5f, area.Y + 6f, 3f, 3f);
+            }
+        }
+
+        private static void DrawTextFit(Graphics g, string text, float preferredSize, float minimumSize, FontStyle style, Color color, RectangleF area, StringAlignment align)
+        {
+            float size = preferredSize;
+            while (size > minimumSize)
+            {
+                using (Font probe = new Font("Segoe UI", size, style, GraphicsUnit.Point))
+                    if (g.MeasureString(text ?? "", probe).Width <= area.Width) break;
+                size -= 0.25f;
+            }
+            DrawText(g, text, Math.Max(minimumSize, size), style, color, area, align);
         }
 
         private void DrawDashboard(Graphics g)
