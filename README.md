@@ -17,12 +17,13 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Fully configurable 3-column and 4-column dashboards.
 - Optional top-three process strip: hide it, rank by CPU, or rank by RAM while showing aggregated CPU and memory usage.
 - Editable, version-aware header title with compact Windows system uptime.
+- The dashboard is click-through except for a compact gear button that opens the control menu.
 - Search and add every sensor exposed through HWiNFO shared memory by label, device, unit, or sensor type.
 - Five reusable component types: Big metric, Horizontal spec, Vertical spec, Graph, and Section.
 - Drag-and-drop placement with grid snapping and overlap prevention.
 - Precise column, half-row, width, and dashboard-height controls.
 - Custom display name for every component.
-- Per-component value formatting with automatic, 0-, 1-, or 2-decimal precision, unit visibility, and a live preview.
+- Per-component value formatting with automatic, 0-, 1-, or 2-decimal precision, unit visibility, a 60–160% value-font control, and a live preview.
 - Five colors and four change thresholds, configured independently per component.
 - Fixed minimum and maximum for every graph.
 - Optional recorded minimum and maximum on Big metric components.
@@ -41,7 +42,7 @@ HWiNFO is a separate application and is not bundled with this repository or its 
 
 ## Dashboard workflow
 
-1. Open **Configure dashboard** from the widget's right-click menu.
+1. Select the gear button in the header, then choose **Configure dashboard**.
 2. Choose the 3-column or 4-column dashboard.
 3. Select **Add**, choose a sensor, and choose a component type.
 4. Drag the component to a free grid position, or enter its exact position in the inspector.
@@ -56,7 +57,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The compiled executable is written to `artifacts\SystemMonitorWidget-v2.3.exe`.
+The compiled executable is written to `artifacts\SystemMonitorWidget-v2.4.exe`.
 
 ## Local data
 
@@ -64,8 +65,8 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.3.exe` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.4.exe` from the [latest release](../../releases/latest).
 2. Open HWiNFO64 settings and enable **Shared Memory Support**.
 3. Start HWiNFO sensors.
-4. Run `SystemMonitorWidget-v2.3.exe`.
-5. Right-click the widget and choose **Configure dashboard** to add sensors, select component types, arrange the grid, and customize colors.
+4. Run `SystemMonitorWidget-v2.4.exe`.
+5. Select the header gear and choose **Configure dashboard** to add sensors, select component types, arrange the grid, customize colors, and format each value.

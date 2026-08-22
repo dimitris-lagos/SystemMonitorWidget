@@ -26,6 +26,7 @@ namespace VegaDesktopWidget
         public int[] Colors = ActivityColors();
         public int ValueDecimals = -1;
         public bool ShowUnit = true;
+        public int ValueFontPercent = 100;
 
         public DashboardItem Clone()
         {
@@ -56,7 +57,7 @@ namespace VegaDesktopWidget
                 Escape(Id), BoxType.ToString(), Escape(SensorKey), Escape(SensorLabel), Escape(SensorName), Escape(DisplayName),
                 Column.ToString(CultureInfo.InvariantCulture), Row.ToString(CultureInfo.InvariantCulture), ColumnSpan.ToString(CultureInfo.InvariantCulture), RowSpan.ToString(CultureInfo.InvariantCulture),
                 ShowExtrema.ToString(), GraphMinimum.ToString("R", CultureInfo.InvariantCulture), GraphMaximum.ToString("R", CultureInfo.InvariantCulture),
-                JoinDoubles(Thresholds), JoinInts(Colors), ValueDecimals.ToString(CultureInfo.InvariantCulture), ShowUnit.ToString()
+                JoinDoubles(Thresholds), JoinInts(Colors), ValueDecimals.ToString(CultureInfo.InvariantCulture), ShowUnit.ToString(), ValueFontPercent.ToString(CultureInfo.InvariantCulture)
             });
         }
 
@@ -80,6 +81,7 @@ namespace VegaDesktopWidget
             item.Colors = ParseInts(p[14], ActivityColors());
             if (p.Length > 15 && Int32.TryParse(p[15], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) item.ValueDecimals = Math.Max(-1, Math.Min(2, n));
             if (p.Length > 16 && Boolean.TryParse(p[16], out flag)) item.ShowUnit = flag;
+            if (p.Length > 17 && Int32.TryParse(p[17], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) item.ValueFontPercent = Math.Max(60, Math.Min(160, n));
             if (item.Id.Length == 0) item.Id = Guid.NewGuid().ToString("N");
             return item;
         }

@@ -237,7 +237,7 @@ namespace VegaDesktopWidget
     {
         private readonly WidgetConfig config; private readonly List<SensorReading> readings; private readonly List<SensorChoice> choices;
         private readonly DashboardCanvas canvas = new DashboardCanvas(); private readonly SplitContainer split = new SplitContainer(); private readonly ComboBox layoutChoice = new ComboBox(), sensorChoice = new ComboBox(), typeChoice = new ComboBox();
-        private readonly TextBox displayName = new TextBox(); private readonly NumericUpDown dashboardRows = Number(4, 30, 14), row = Number(1, 30, 1), column = Number(1, 4, 1), columnSpan = Number(1, 4, 1), graphMin = Number(-100000, 100000, 0), graphMax = Number(-100000, 100000, 100);
+        private readonly TextBox displayName = new TextBox(); private readonly NumericUpDown dashboardRows = Number(4, 30, 14), row = Number(1, 30, 1), column = Number(1, 4, 1), columnSpan = Number(1, 4, 1), graphMin = Number(-100000, 100000, 0), graphMax = Number(-100000, 100000, 100), valueFontPercent = Number(60, 160, 100);
         private readonly CheckBox extrema = new CheckBox(), showUnit = new CheckBox(); private readonly NumericUpDown[] thresholds = new NumericUpDown[4]; private readonly Button[] colorButtons = new Button[5];
         private readonly ComboBox valueDecimals = new ComboBox(); private readonly Label formatPreview = new Label(), placementStatus = new Label(); private bool loading; private int editorColumns = 4;
 
@@ -283,6 +283,7 @@ namespace VegaDesktopWidget
             typeChoice.DropDownStyle = ComboBoxStyle.DropDownList; typeChoice.Items.AddRange(new object[] { "Big metric", "Horizontal spec", "Vertical spec", "Graph", "Section heading" }); AddRow(table, "Box type", typeChoice);
             Heading(table, "VALUE FORMAT"); valueDecimals.DropDownStyle = ComboBoxStyle.DropDownList; valueDecimals.Items.AddRange(new object[] { "Automatic", "0 decimals", "1 decimal", "2 decimals" }); AddRow(table, "Decimals", valueDecimals);
             showUnit.Text = "Show sensor unit"; showUnit.AutoSize = true; AddRow(table, "Unit", showUnit);
+            valueFontPercent.Increment = 5; AddRow(table, "Value font (%)", valueFontPercent);
             formatPreview.AutoSize = true; formatPreview.Font = new Font("Segoe UI", 10f, FontStyle.Bold); formatPreview.ForeColor = Color.FromArgb(45, 112, 190); AddRow(table, "Preview", formatPreview);
             Heading(table, "POSITION & SIZE"); AddRow(table, "Column", column); AddRow(table, "Half-row", row); AddRow(table, "Width (cells)", columnSpan);
             extrema.Text = "Show minimum / maximum"; extrema.AutoSize = true; AddRow(table, "", extrema);
@@ -301,7 +302,7 @@ namespace VegaDesktopWidget
             displayName.TextChanged += delegate { PropertyChanged(); }; sensorChoice.SelectedIndexChanged += delegate { PropertyChanged(); }; typeChoice.SelectedIndexChanged += delegate { TypeChanged(); };
             row.ValueChanged += delegate { PositionChanged(); }; column.ValueChanged += delegate { PositionChanged(); }; columnSpan.ValueChanged += delegate { PositionChanged(); };
             extrema.CheckedChanged += delegate { PropertyChanged(); }; graphMin.ValueChanged += delegate { PropertyChanged(); }; graphMax.ValueChanged += delegate { PropertyChanged(); };
-            valueDecimals.SelectedIndexChanged += delegate { PropertyChanged(); }; showUnit.CheckedChanged += delegate { PropertyChanged(); };
+            valueDecimals.SelectedIndexChanged += delegate { PropertyChanged(); }; showUnit.CheckedChanged += delegate { PropertyChanged(); }; valueFontPercent.ValueChanged += delegate { PropertyChanged(); };
             return panel;
         }
 
@@ -352,13 +353,13 @@ namespace VegaDesktopWidget
         private void LoadSelected()
         {
             loading = true; DashboardItem item = canvas.SelectedItem; bool enabled = item != null;
-            displayName.Enabled = sensorChoice.Enabled = typeChoice.Enabled = row.Enabled = column.Enabled = columnSpan.Enabled = extrema.Enabled = graphMin.Enabled = graphMax.Enabled = valueDecimals.Enabled = showUnit.Enabled = enabled;
+            displayName.Enabled = sensorChoice.Enabled = typeChoice.Enabled = row.Enabled = column.Enabled = columnSpan.Enabled = extrema.Enabled = graphMin.Enabled = graphMax.Enabled = valueDecimals.Enabled = showUnit.Enabled = valueFontPercent.Enabled = enabled;
             foreach (NumericUpDown threshold in thresholds) if (threshold != null) threshold.Enabled = enabled;
             foreach (Button button in colorButtons) if (button != null) button.Enabled = enabled;
             if (!enabled) { displayName.Text = ""; formatPreview.Text = "—"; placementStatus.Text = "Select a component or click + Add."; loading = false; return; }
             displayName.Text = item.DisplayName; typeChoice.SelectedIndex = (int)item.BoxType; row.Value = Clamp(row, item.Row + 1); column.Value = Clamp(column, item.Column + 1); columnSpan.Value = Clamp(columnSpan, item.ColumnSpan); extrema.Checked = item.ShowExtrema;
             graphMin.Value = Clamp(graphMin, (decimal)item.GraphMinimum); graphMax.Value = Clamp(graphMax, (decimal)item.GraphMaximum);
-            valueDecimals.SelectedIndex = Math.Max(0, Math.Min(3, item.ValueDecimals + 1)); showUnit.Checked = item.ShowUnit;
+            valueDecimals.SelectedIndex = Math.Max(0, Math.Min(3, item.ValueDecimals + 1)); showUnit.Checked = item.ShowUnit; valueFontPercent.Value = Clamp(valueFontPercent, item.ValueFontPercent);
             SelectSensor(item); for (int i = 0; i < 4; i++) thresholds[i].Value = Clamp(thresholds[i], (decimal)item.Thresholds[i]);
             for (int i = 0; i < 5; i++) SetColorButton(i, Color.FromArgb(item.Colors[i]));
             UpdateVisibility(item); UpdateFormatPreview(item); placementStatus.Text = ""; loading = false;
@@ -398,7 +399,7 @@ namespace VegaDesktopWidget
             for (int i = 0; i < 4; i++) item.Thresholds[i] = (double)thresholds[i].Value;
             SensorChoice choice = sensorChoice.SelectedItem as SensorChoice;
             if (choice != null && item.BoxType != DashboardBoxType.Section) { item.SensorKey = choice.Key; item.SensorLabel = choice.Label; item.SensorName = choice.SensorName; }
-            item.ValueDecimals = Math.Max(-1, valueDecimals.SelectedIndex - 1); item.ShowUnit = showUnit.Checked; UpdateFormatPreview(item);
+            item.ValueDecimals = Math.Max(-1, valueDecimals.SelectedIndex - 1); item.ShowUnit = showUnit.Checked; item.ValueFontPercent = (int)valueFontPercent.Value; UpdateFormatPreview(item);
             canvas.Invalidate();
         }
 
@@ -409,12 +410,13 @@ namespace VegaDesktopWidget
 
         private void UpdateVisibility(DashboardItem item)
         {
-            bool section = item.BoxType == DashboardBoxType.Section, graph = item.BoxType == DashboardBoxType.Graph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = graph || section; extrema.Enabled = item.BoxType == DashboardBoxType.Big; sensorChoice.Enabled = valueDecimals.Enabled = showUnit.Enabled = !section;
+            bool section = item.BoxType == DashboardBoxType.Section, graph = item.BoxType == DashboardBoxType.Graph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = graph || section; extrema.Enabled = item.BoxType == DashboardBoxType.Big; sensorChoice.Enabled = valueDecimals.Enabled = showUnit.Enabled = valueFontPercent.Enabled = !section;
         }
 
         private void UpdateFormatPreview(DashboardItem item)
         {
-            if (item == null || item.BoxType == DashboardBoxType.Section) { formatPreview.Text = "—"; return; }
+            if (item == null || item.BoxType == DashboardBoxType.Section) { formatPreview.Text = "—"; formatPreview.Font = new Font("Segoe UI", 10f, FontStyle.Bold); return; }
+            formatPreview.Font = new Font("Segoe UI", Math.Max(6f, Math.Min(16f, 10f * item.ValueFontPercent / 100f)), FontStyle.Bold);
             if (item.SensorKey == "__RAM_USED__") { formatPreview.Text = SensorValueFormatter.FormatValue(6.3, "GB", item.ValueDecimals, item.ShowUnit); return; }
             SensorChoice choice = sensorChoice.SelectedItem as SensorChoice; formatPreview.Text = SensorValueFormatter.FormatReading(choice == null ? null : choice.Reading, item.ValueDecimals, item.ShowUnit);
         }

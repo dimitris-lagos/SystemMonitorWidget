@@ -26,7 +26,8 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private bool dragging; private Point dragStart; private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem;
+        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem;
+        private const int WmNcHitTest = 0x0084, HtClient = 1, HtTransparent = -1;
 
         private float UiScale { get { if (config.UiScaleMode == 75) return 0.75f; if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
         private int CanvasWidth { get { return config.Width; } }
@@ -40,7 +41,7 @@ namespace VegaDesktopWidget
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
             BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
             Shown += delegate { RefreshSensors(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
-            MouseDown += DragMouseDown; MouseMove += DragMouseMove; MouseUp += DragMouseUp; DoubleClick += delegate { ShowSettings(); };
+            MouseDown += GearMouseDown;
             if (config.LaunchHWiNFO) LaunchHWiNFO();
         }
 
@@ -53,7 +54,7 @@ namespace VegaDesktopWidget
             scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
-            menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); }); ContextMenuStrip = menu;
+            menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); });
         }
 
         private void AddGridMenuItem(string text, int columns) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = columns; item.Click += delegate { SetGridColumns(columns); }; gridItem.DropDownItems.Add(item); }
@@ -107,7 +108,7 @@ namespace VegaDesktopWidget
             base.OnPaint(e); Graphics g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit; g.ScaleTransform(UiScale, UiScale);
             Rectangle outer = new Rectangle(0, 0, CanvasWidth - 1, LogicalHeight - 1);
             using (GraphicsPath path = Rounded(outer, 14)) { using (SolidBrush b = new SolidBrush(Color.FromArgb(13, 17, 23))) g.FillPath(b, path); using (Pen p = new Pen(Color.FromArgb(48, 58, 71))) g.DrawPath(p, path); }
-            DrawHeader(g); DrawDashboard(g);
+            DrawHeader(g); DrawDashboard(g); g.ResetTransform(); DrawGearButton(g);
             using (GraphicsPath physicalPath = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Max(2, (int)Math.Round(14 * UiScale)))) Region = new Region(physicalPath);
         }
 
@@ -115,7 +116,7 @@ namespace VegaDesktopWidget
         {
             using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(1, 1, CanvasWidth - 2, 54), Color.FromArgb(31, 39, 51), Color.FromArgb(21, 27, 36), 90f)) g.FillRectangle(b, 1, 1, CanvasWidth - 2, 54);
             DrawTextFit(g, config.HeaderTitle, 13.5f, 9f, FontStyle.Bold, Color.White, new RectangleF(16, 10, CanvasWidth - 150, 24), StringAlignment.Near);
-            bool live = readings.Count > 0; using (SolidBrush dot = new SolidBrush(live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77))) g.FillEllipse(dot, CanvasWidth - 112, 17, 8, 8);
+
             DrawText(g, FormatSystemUptime(), 8, FontStyle.Bold, Color.FromArgb(180, 194, 210), new RectangleF(CanvasWidth - 98, 12, 86, 18), StringAlignment.Far);
             DrawProcessStrip(g, new RectangleF(12, 34, CanvasWidth - 24, 14));
         }
@@ -164,6 +165,7 @@ namespace VegaDesktopWidget
                 Rectangle r = ItemRectangle(item);
                 if (r.Width <= 0 || r.Height <= 0) continue;
                 if (item.BoxType == DashboardBoxType.Section) { DrawSection(g, r, item); continue; }
+                float valueFontScale = Math.Max(0.6f, Math.Min(1.6f, item.ValueFontPercent / 100f));
                 SensorReading reading = Resolve(item); double? raw = ItemValue(item);
                 Color color = raw.HasValue ? item.ColorFor(raw.Value) : Color.FromArgb(85, 96, 110);
                 string value = item.SensorKey == "__RAM_USED__" ? (ramAvailable ? SensorValueFormatter.FormatValue(ramUsed, "GB", item.ValueDecimals, item.ShowUnit) : "—") : SensorValueFormatter.FormatReading(reading, item.ValueDecimals, item.ShowUnit);
@@ -172,16 +174,16 @@ namespace VegaDesktopWidget
                 {
                     MetricExtrema range = GetExtrema(item.Id);
                     string max = FormatExtrema(item, reading, range, true), min = FormatExtrema(item, reading, range, false);
-                    components.DrawBigMetric(g, r, label, value, max, min, color, item.ShowExtrema);
+                    components.DrawBigMetric(g, r, label, value, max, min, color, item.ShowExtrema, valueFontScale);
                 }
-                else if (item.BoxType == DashboardBoxType.Horizontal) components.DrawHorizontalSpec(g, r, label, value, color);
-                else if (item.BoxType == DashboardBoxType.Vertical) components.DrawVerticalSpec(g, r, label, value, color);
+                else if (item.BoxType == DashboardBoxType.Horizontal) components.DrawHorizontalSpec(g, r, label, value, color, valueFontScale);
+                else if (item.BoxType == DashboardBoxType.Vertical) components.DrawVerticalSpec(g, r, label, value, color, valueFontScale);
                 else if (item.BoxType == DashboardBoxType.Graph)
                 {
                     List<double> values = null; if (config.ShowGraphs) history.TryGetValue(item.Id, out values);
                     string unit = !item.ShowUnit || reading == null || reading.Unit == null ? "" : reading.Unit.Trim();
                     string range = FormatRange(item.GraphMinimum, item.GraphMaximum, unit);
-                    components.DrawGraphBox(g, r, label, value, range, color, values, item.GraphMinimum, item.GraphMaximum);
+                    components.DrawGraphBox(g, r, label, value, range, color, values, item.GraphMinimum, item.GraphMaximum, valueFontScale);
                 }
             }
         }
@@ -227,9 +229,37 @@ namespace VegaDesktopWidget
             { sf.Alignment = align; sf.LineAlignment = StringAlignment.Center; sf.Trimming = StringTrimming.None; sf.FormatFlags = StringFormatFlags.NoWrap; g.DrawString(text ?? "", f, b, area, sf); }
         }
         private static GraphicsPath Rounded(Rectangle r, int radius) { GraphicsPath p = new GraphicsPath(); int d = radius * 2; p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90); p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90); p.CloseFigure(); return p; }
-        private void DragMouseDown(object sender, MouseEventArgs e) { if (e.Button == MouseButtons.Left) { dragging = true; dragStart = e.Location; } }
-        private void DragMouseMove(object sender, MouseEventArgs e) { if (dragging) Location = new Point(Left + e.X - dragStart.X, Top + e.Y - dragStart.Y); }
-        private void DragMouseUp(object sender, MouseEventArgs e) { if (!dragging) return; dragging = false; config.Left = Left; config.Top = Top; config.Save(); }
+        private Rectangle GearBounds
+        {
+            get
+            {
+                int size = Math.Max(14, (int)Math.Round(20 * UiScale));
+                int centerX = (int)Math.Round((CanvasWidth - 108) * UiScale), centerY = Math.Max(size / 2 + 2, (int)Math.Round(21 * UiScale));
+                return new Rectangle(centerX - size / 2, centerY - size / 2, size, size);
+            }
+        }
+        private void DrawGearButton(Graphics g)
+        {
+            Rectangle r = GearBounds; bool live = readings.Count > 0; Color accent = live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77);
+            using (SolidBrush background = new SolidBrush(Color.FromArgb(175, 23, 30, 39))) g.FillEllipse(background, r);
+            using (Pen border = new Pen(Color.FromArgb(155, accent), 1f)) g.DrawEllipse(border, r.X + 0.5f, r.Y + 0.5f, r.Width - 1f, r.Height - 1f);
+            using (Font font = new Font("Segoe UI Symbol", Math.Max(8f, 11f * UiScale), FontStyle.Regular, GraphicsUnit.Point))
+            using (SolidBrush brush = new SolidBrush(accent))
+            using (StringFormat format = new StringFormat()) { format.Alignment = StringAlignment.Center; format.LineAlignment = StringAlignment.Center; g.DrawString("\u2699", font, brush, r, format); }
+        }
+        private void GearMouseDown(object sender, MouseEventArgs e)
+        {
+            if ((e.Button == MouseButtons.Left || e.Button == MouseButtons.Right) && GearBounds.Contains(e.Location)) menu.Show(this, new Point(GearBounds.Left, GearBounds.Bottom + 2));
+        }
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WmNcHitTest)
+            {
+                int packed = unchecked((int)(long)m.LParam); Point screen = new Point((short)(packed & 0xffff), (short)((packed >> 16) & 0xffff)); Point client = PointToClient(screen);
+                m.Result = GearBounds.Contains(client) ? (IntPtr)HtClient : (IntPtr)HtTransparent; return;
+            }
+            base.WndProc(ref m);
+        }
         private Point ClampLocation(Point p) { Rectangle work = Screen.PrimaryScreen.WorkingArea; return new Point(Math.Max(work.Left, Math.Min(work.Right - Width, p.X)), Math.Max(work.Top, Math.Min(work.Bottom - Height, p.Y))); }
         private void ShowSettings() { using (SettingsForm form = new SettingsForm(config, readings)) { if (form.ShowDialog(this) != DialogResult.OK) return; config = form.Result; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds; topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); config.Save(); RefreshSensors(); } }
         private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; string path = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE"; if (File.Exists(path)) Process.Start(path); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }

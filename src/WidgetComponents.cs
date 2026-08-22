@@ -63,42 +63,42 @@ namespace VegaDesktopWidget
         private static readonly Color LabelColor = Color.FromArgb(129, 143, 160);
         private static readonly Color SecondaryColor = Color.FromArgb(105, 117, 132);
 
-        public void DrawBigMetric(Graphics g, Rectangle r, string label, string current, string maximum, string minimum, Color accent, bool showExtrema)
+        public void DrawBigMetric(Graphics g, Rectangle r, string label, string current, string maximum, string minimum, Color accent, bool showExtrema, float valueFontScale)
         {
             FillBox(g, r);
             if (showExtrema)
             {
                 DrawText(g, label, 6.7f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 7, r.Y + 4, r.Width - 14, 14), StringAlignment.Near);
-                DrawValueText(g, current, current.Length > 7 ? 11.5f : current.Length > 4 ? 12.5f : 17f, FontStyle.Bold, accent, new RectangleF(r.X + 3, r.Y + 21, r.Width - 6, r.Height - 25), StringAlignment.Near);
+                DrawValueText(g, current, (current.Length > 7 ? 11.5f : current.Length > 4 ? 12.5f : 17f) * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X + 3, r.Y + 21, r.Width - 6, r.Height - 25), StringAlignment.Near);
                 DrawValueText(g, "↑ " + maximum, 9f, FontStyle.Bold, SecondaryColor, new RectangleF(r.X + 3, r.Y + 21, r.Width - 6, 13), StringAlignment.Far);
                 DrawValueText(g, "↓ " + minimum, 9f, FontStyle.Bold, SecondaryColor, new RectangleF(r.X + 3, r.Y + 36, r.Width - 6, 13), StringAlignment.Far);
             }
             else
             {
                 DrawText(g, label, 6.7f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 7, r.Y + 6, r.Width - 14, 15), StringAlignment.Near);
-                DrawValueText(g, current, current.Length > 7 ? 11.5f : current.Length > 4 ? 14.5f : 18f, FontStyle.Bold, accent, new RectangleF(r.X + 2, r.Y + 20, r.Width - 4, r.Height - 22), StringAlignment.Near);
+                DrawValueText(g, current, (current.Length > 7 ? 11.5f : current.Length > 4 ? 14.5f : 18f) * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X + 2, r.Y + 20, r.Width - 4, r.Height - 22), StringAlignment.Near);
             }
         }
-        public void DrawHorizontalSpec(Graphics g, Rectangle r, string label, string value, Color accent)
+        public void DrawHorizontalSpec(Graphics g, Rectangle r, string label, string value, Color accent, float valueFontScale)
         {
             FillBox(g, r);
             DrawText(g, label, 6.2f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 3, r.Y + 2, r.Width - 6, r.Height - 4), StringAlignment.Near);
-            DrawValueText(g, value, value.Length > 4 ? 10.5f : 12.5f, FontStyle.Bold, accent, new RectangleF(r.X + 3, r.Y + 2, r.Width - 6, r.Height - 4), StringAlignment.Far);
+            DrawValueText(g, value, (value.Length > 4 ? 10.5f : 12.5f) * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X + 3, r.Y + 2, r.Width - 6, r.Height - 4), StringAlignment.Far);
         }
 
-        public void DrawVerticalSpec(Graphics g, Rectangle r, string label, string value, Color accent)
+        public void DrawVerticalSpec(Graphics g, Rectangle r, string label, string value, Color accent, float valueFontScale)
         {
             FillBox(g, r);
             DrawText(g, label, 7f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 7, r.Y + 6, r.Width - 14, 14), StringAlignment.Near);
-            DrawValueText(g, value, value.Length > 5 ? 11.5f : 14.5f, FontStyle.Bold, accent, new RectangleF(r.X, r.Y + 20, r.Width, r.Height - 23), StringAlignment.Near);
+            DrawValueText(g, value, (value.Length > 5 ? 11.5f : 14.5f) * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X, r.Y + 20, r.Width, r.Height - 23), StringAlignment.Near);
         }
 
-        public void DrawGraphBox(Graphics g, Rectangle r, string label, string current, string rangeText, Color accent, IList<double> values, double minimum, double maximum)
+        public void DrawGraphBox(Graphics g, Rectangle r, string label, string current, string rangeText, Color accent, IList<double> values, double minimum, double maximum, float valueFontScale)
         {
             FillBox(g, r);
             DrawText(g, label, 7f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 7, r.Y + 5, 145, 15), StringAlignment.Near);
             DrawValueText(g, rangeText, 8.5f, FontStyle.Regular, SecondaryColor, new RectangleF(r.Right - 75, r.Y + 5, 68, 15), StringAlignment.Far);
-            DrawValueText(g, current, 15f, FontStyle.Bold, accent, new RectangleF(r.X + 7, r.Y + 21, 95, 28), StringAlignment.Near);
+            DrawValueText(g, current, 15f * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X + 7, r.Y + 21, 95, 28), StringAlignment.Near);
             DrawSpark(g, new Rectangle(r.X + 112, r.Y + 20, r.Width - 120, r.Height - 27), accent, values, minimum, maximum);
         }
 
