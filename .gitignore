@@ -1,0 +1,26 @@
+# Build outputs
+artifacts/
+bin/
+obj/
+*.exe
+*.zip
+*.pdb
+
+# IDE and user-local state
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+
+# Runtime and diagnostic data
+settings.ini
+*.log
+*.csv
+*.bak
+*.tmp
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store
