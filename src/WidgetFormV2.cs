@@ -46,6 +46,7 @@ namespace VegaDesktopWidget
     {
         [DllImport("kernel32.dll")]
         private static extern ulong GetTickCount64();
+
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
         private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
@@ -60,9 +61,9 @@ namespace VegaDesktopWidget
         private string status = "Starting";
         private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
         private int lastMenuAppCloseTick = -10000;
-        private const int WmNcHitTest = 0x0084, HtTransparent = -1;
+
         protected override bool ShowWithoutActivation { get { return true; } }
-        protected override CreateParams CreateParams { get { CreateParams p = base.CreateParams; p.ExStyle |= 0x20 | 0x08000000 | 0x80; return p; } }
+        protected override CreateParams CreateParams { get { CreateParams p = base.CreateParams; p.ExStyle |= 0x08000000 | 0x80; return p; } }
 
         private float UiScale { get { if (config.UiScaleMode == 75) return 0.75f; if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
         private int CanvasWidth { get { return config.Width; } }
@@ -102,7 +103,8 @@ namespace VegaDesktopWidget
         private void AddProcessMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetProcessMode(mode); }; processItem.DropDownItems.Add(item); }
         private void SetProcessMode(int mode) { config.ProcessStripMode = Math.Max(0, Math.Min(2, mode)); topProcesses.Clear(); UpdateProcessMenu(); config.Save(); RefreshSensors(); }
         private void UpdateProcessMenu() { if (processItem == null) return; foreach (ToolStripItem raw in processItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.ProcessStripMode; } }
-        private void ApplyWidgetSize() { float scale = UiScale; Size scaled = new Size(Math.Max(1, (int)Math.Round(config.Width * scale)), Math.Max(1, (int)Math.Round(LogicalHeight * scale))); MinimumSize = Size.Empty; MaximumSize = Size.Empty; Size = scaled; MinimumSize = scaled; MaximumSize = scaled; }
+        private void ApplyWidgetSize() { float scale = UiScale; Size scaled = new Size(Math.Max(1, (int)Math.Round(config.Width * scale)), Math.Max(1, (int)Math.Round(LogicalHeight * scale))); MinimumSize = Size.Empty; MaximumSize = Size.Empty; Size = scaled; MinimumSize = scaled; MaximumSize = scaled; ApplyWindowRegion(); }
+        private void ApplyWindowRegion() { if (Width <= 0 || Height <= 0) return; using (GraphicsPath path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Max(2, (int)Math.Round(14 * UiScale)))) Region = new Region(path); }
 
         private void RefreshSensors()
         {
@@ -145,7 +147,6 @@ namespace VegaDesktopWidget
             Rectangle outer = new Rectangle(0, 0, CanvasWidth - 1, LogicalHeight - 1);
             using (GraphicsPath path = Rounded(outer, 14)) { using (SolidBrush b = new SolidBrush(Color.FromArgb(13, 17, 23))) g.FillPath(b, path); using (Pen p = new Pen(Color.FromArgb(48, 58, 71))) g.DrawPath(p, path); }
             DrawHeader(g); DrawDashboard(g);
-            using (GraphicsPath physicalPath = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Max(2, (int)Math.Round(14 * UiScale)))) Region = new Region(physicalPath);
         }
 
         private void DrawHeader(Graphics g)
@@ -296,11 +297,7 @@ namespace VegaDesktopWidget
         {
             if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked) lastMenuAppCloseTick = Environment.TickCount;
         }
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == WmNcHitTest) { m.Result = (IntPtr)HtTransparent; return; }
-            base.WndProc(ref m);
-        }
+
         private Point ClampLocation(Point p) { Rectangle work = Screen.PrimaryScreen.WorkingArea; return new Point(Math.Max(work.Left, Math.Min(work.Right - Width, p.X)), Math.Max(work.Top, Math.Min(work.Bottom - Height, p.Y))); }
         private void ShowSettings() { using (SettingsForm form = new SettingsForm(config, readings)) { if (form.ShowDialog(this) != DialogResult.OK) return; config = form.Result; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds; topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); RefreshSensors(); } }
         private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; string path = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE"; if (File.Exists(path)) Process.Start(path); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }

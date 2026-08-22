@@ -4,5 +4,5 @@ using System.Reflection;
 [assembly: AssemblyDescription("Modular HWiNFO desktop hardware monitor")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("System Monitor Widget")]
-[assembly: AssemblyVersion("2.4.1.0")]
-[assembly: AssemblyFileVersion("2.4.1.0")]
+[assembly: AssemblyVersion("2.4.3.0")]
+[assembly: AssemblyFileVersion("2.4.3.0")]
