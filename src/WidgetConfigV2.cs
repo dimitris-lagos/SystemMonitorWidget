@@ -9,6 +9,7 @@ namespace VegaDesktopWidget
     internal sealed class WidgetConfig
     {
         public int Left = 60, Top = 60, Width = 370, UiScaleMode = 100, GridColumns = 4, RefreshMilliseconds = 1000, OpacityPercent = 96;
+        public int ProcessStripMode = 2;
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
         public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false;
         public Dictionary<string, string> RoleKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -35,9 +36,10 @@ namespace VegaDesktopWidget
                 else if (k.Equals("Width", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.Width = Math.Max(340, Math.Min(600, n));
                 else if (k.Equals("GridColumns", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && (n == 3 || n == 4)) c.GridColumns = n;
                 else if (k.Equals("UiScaleDivisor", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.UiScaleMode = n == 1 ? 100 : n == 2 ? 50 : n == 3 ? 33 : 25;
-                else if (k.Equals("UiScaleMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && (n == 100 || n == 67 || n == 50 || n == 33 || n == 25)) c.UiScaleMode = n;
+                else if (k.Equals("UiScaleMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && (n == 100 || n == 75 || n == 67 || n == 50 || n == 33 || n == 25)) c.UiScaleMode = n;
                 else if (k.Equals("RefreshMilliseconds", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.RefreshMilliseconds = Math.Max(500, Math.Min(5000, n));
                 else if (k.Equals("OpacityPercent", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.OpacityPercent = Math.Max(65, Math.Min(100, n));
+                else if (k.Equals("ProcessStripMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && n >= 0 && n <= 2) c.ProcessStripMode = n;
                 else if (k.Equals("CpuGraphMin", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.CpuGraphMin = Math.Max(0, n);
                 else if (k.Equals("CpuGraphMax", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.CpuGraphMax = Math.Max(1, n);
                 else if (k.Equals("GpuGraphMin", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.GpuGraphMin = Math.Max(0, n);
@@ -64,6 +66,7 @@ namespace VegaDesktopWidget
             Directory.CreateDirectory(Folder); List<string> l = new List<string>(); l.Add("# System Monitor Widget modular settings v2.0");
             l.Add("Left=" + Left.ToString(CultureInfo.InvariantCulture)); l.Add("Top=" + Top.ToString(CultureInfo.InvariantCulture)); l.Add("Width=" + Width.ToString(CultureInfo.InvariantCulture)); l.Add("UiScaleMode=" + UiScaleMode.ToString(CultureInfo.InvariantCulture)); l.Add("GridColumns=" + GridColumns.ToString(CultureInfo.InvariantCulture));
             l.Add("RefreshMilliseconds=" + RefreshMilliseconds.ToString(CultureInfo.InvariantCulture)); l.Add("OpacityPercent=" + OpacityPercent.ToString(CultureInfo.InvariantCulture));
+            l.Add("ProcessStripMode=" + ProcessStripMode.ToString(CultureInfo.InvariantCulture));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
             l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO);
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);

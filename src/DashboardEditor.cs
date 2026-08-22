@@ -8,26 +8,56 @@ namespace VegaDesktopWidget
 {
     internal sealed class SensorChoice
     {
-        public string Key, Label, SensorName, Unit, Display;
+        public string Key, Label, SensorName, Unit, Display, SearchText;
         public SensorReading Reading;
         public override string ToString() { return Display; }
+
+        public bool Matches(string query)
+        {
+            if (String.IsNullOrWhiteSpace(query)) return true;
+            string[] terms = query.ToLowerInvariant().Split(new char[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            string searchable = SearchText ?? "";
+            foreach (string term in terms) if (searchable.IndexOf(term, StringComparison.Ordinal) < 0) return false;
+            return true;
+        }
+
+        private static string TypeAliases(SensorReading reading)
+        {
+            string unit = (reading.Unit ?? "").Trim().ToLowerInvariant();
+            switch (reading.Type)
+            {
+                case 1: return "temperature temp thermal celsius degrees";
+                case 2: return "voltage volt volts";
+                case 3: return "fan rpm speed tachometer rotation";
+                case 4: return "current amp amps ampere";
+                case 5: return "power watt watts consumption";
+                case 6: return "clock frequency mhz ghz";
+                case 7: return "usage utilization load percent";
+            }
+            if (unit == "rpm") return "fan rpm speed tachometer rotation";
+            if (unit == "w") return "power watt watts consumption";
+            if (unit == "mhz" || unit == "ghz") return "clock frequency mhz ghz";
+            if (unit == "%") return "usage utilization load percent";
+            return "other sensor reading";
+        }
 
         public static List<SensorChoice> Build(List<SensorReading> readings)
         {
             List<SensorChoice> result = new List<SensorChoice>();
-            result.Add(new SensorChoice { Key = "__RAM_USED__", Label = "RAM used", SensorName = "System memory", Unit = "GB", Display = "RAM used  —  System memory  [GB]" });
+            result.Add(new SensorChoice { Key = "__RAM_USED__", Label = "RAM used", SensorName = "System memory", Unit = "GB", Display = "RAM used  —  System memory  [GB]", SearchText = "ram used system memory gb utilization usage" });
             foreach (SensorReading reading in readings)
             {
+                string display = reading.Label + "  —  " + reading.SensorName + (String.IsNullOrWhiteSpace(reading.Unit) ? "" : "  [" + reading.Unit.Trim() + "]");
+                string search = String.Join(" ", new string[] { reading.Label, reading.OriginalLabel, reading.SensorName, reading.Unit, TypeAliases(reading) }).ToLowerInvariant();
                 result.Add(new SensorChoice {
                     Key = reading.Key, Label = reading.OriginalLabel, SensorName = reading.SensorName, Unit = reading.Unit, Reading = reading,
-                    Display = reading.Label + "  —  " + reading.SensorName + (String.IsNullOrWhiteSpace(reading.Unit) ? "" : "  [" + reading.Unit.Trim() + "]")
+                    Display = display, SearchText = search
                 });
             }
             result.Sort(delegate(SensorChoice a, SensorChoice b) { if (a.Key == "__RAM_USED__") return -1; if (b.Key == "__RAM_USED__") return 1; return String.Compare(a.Display, b.Display, StringComparison.CurrentCultureIgnoreCase); });
             return result;
         }
     }
-
     internal sealed class DashboardCanvas : Control
     {
         private const int MarginSize = 8, ColumnGap = 7, RowGap = 5, SlotHeight = 31;
@@ -169,24 +199,40 @@ namespace VegaDesktopWidget
 
     internal sealed class AddComponentDialog : Form
     {
-        private readonly ComboBox sensor = new ComboBox(), type = new ComboBox();
+        private readonly TextBox search = new TextBox();
+        private readonly ListBox sensor = new ListBox();
+        private readonly ComboBox type = new ComboBox();
+        private readonly Label resultCount = new Label();
+        private readonly Button add = new Button();
         private readonly List<SensorChoice> choices;
         public SensorChoice SelectedSensor { get { return sensor.SelectedItem as SensorChoice; } }
         public DashboardBoxType SelectedType { get { return (DashboardBoxType)Math.Max(0, type.SelectedIndex); } }
 
         public AddComponentDialog(List<SensorChoice> available)
         {
-            choices = available; Text = "Add dashboard component"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(680, 190); FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false; Font = new Font("Segoe UI", 9f);
-            TableLayoutPanel table = new TableLayoutPanel(); table.Dock = DockStyle.Fill; table.Padding = new Padding(18); table.ColumnCount = 2; table.RowCount = 3; table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            table.Controls.Add(LabelFor("Sensor"), 0, 0); sensor.Dock = DockStyle.Fill; sensor.DropDownStyle = ComboBoxStyle.DropDown; sensor.AutoCompleteMode = AutoCompleteMode.SuggestAppend; sensor.AutoCompleteSource = AutoCompleteSource.ListItems; sensor.DropDownWidth = 900; foreach (SensorChoice choice in choices) sensor.Items.Add(choice); if (sensor.Items.Count > 0) sensor.SelectedIndex = 0; table.Controls.Add(sensor, 1, 0);
-            table.Controls.Add(LabelFor("Box type"), 0, 1); type.Dock = DockStyle.Left; type.Width = 240; type.DropDownStyle = ComboBoxStyle.DropDownList; type.Items.AddRange(new object[] { "Big metric", "Horizontal spec (half-cell)", "Vertical spec", "Graph", "Section heading" }); type.SelectedIndex = 0; table.Controls.Add(type, 1, 1);
-            FlowLayoutPanel buttons = new FlowLayoutPanel(); buttons.FlowDirection = FlowDirection.RightToLeft; buttons.Dock = DockStyle.Fill; Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; Button add = new Button(); add.Text = "Add"; add.DialogResult = DialogResult.OK; buttons.Controls.Add(cancel); buttons.Controls.Add(add); table.Controls.Add(buttons, 0, 2); table.SetColumnSpan(buttons, 2); Controls.Add(table); AcceptButton = add; CancelButton = cancel;
-            type.SelectedIndexChanged += delegate { sensor.Enabled = SelectedType != DashboardBoxType.Section; };
+            choices = available ?? new List<SensorChoice>(); Text = "Add dashboard component"; StartPosition = FormStartPosition.CenterParent; ClientSize = new Size(820, 510); MinimumSize = new Size(720, 430); Font = new Font("Segoe UI", 9f);
+            TableLayoutPanel table = new TableLayoutPanel(); table.Dock = DockStyle.Fill; table.Padding = new Padding(18); table.ColumnCount = 2; table.RowCount = 5; table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); table.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 25)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); table.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            table.Controls.Add(LabelFor("Find sensor"), 0, 0); search.Dock = DockStyle.Fill; search.Margin = new Padding(3, 4, 3, 6); table.Controls.Add(search, 1, 0);
+            table.Controls.Add(LabelFor("Sensors"), 0, 1); sensor.Dock = DockStyle.Fill; sensor.IntegralHeight = false; sensor.HorizontalScrollbar = true; table.Controls.Add(sensor, 1, 1);
+            resultCount.Dock = DockStyle.Fill; resultCount.ForeColor = Color.DimGray; resultCount.TextAlign = ContentAlignment.MiddleLeft; table.Controls.Add(resultCount, 1, 2);
+            table.Controls.Add(LabelFor("Box type"), 0, 3); type.Dock = DockStyle.Left; type.Width = 260; type.DropDownStyle = ComboBoxStyle.DropDownList; type.Items.AddRange(new object[] { "Big metric", "Horizontal spec (half-cell)", "Vertical spec", "Graph", "Section heading" }); type.SelectedIndex = 0; table.Controls.Add(type, 1, 3);
+            FlowLayoutPanel buttons = new FlowLayoutPanel(); buttons.FlowDirection = FlowDirection.RightToLeft; buttons.Dock = DockStyle.Fill; Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Size = new Size(90, 30); add.Text = "Add"; add.DialogResult = DialogResult.OK; add.Size = new Size(90, 30); buttons.Controls.Add(cancel); buttons.Controls.Add(add); table.Controls.Add(buttons, 0, 4); table.SetColumnSpan(buttons, 2); Controls.Add(table); AcceptButton = add; CancelButton = cancel;
+            search.TextChanged += delegate { ApplyFilter(); }; sensor.SelectedIndexChanged += delegate { UpdateAddState(); }; sensor.DoubleClick += delegate { if (add.Enabled) { DialogResult = DialogResult.OK; Close(); } }; type.SelectedIndexChanged += delegate { bool needsSensor = SelectedType != DashboardBoxType.Section; search.Enabled = sensor.Enabled = needsSensor; UpdateAddState(); };
+            ApplyFilter(); search.Select();
         }
 
+        private void ApplyFilter()
+        {
+            SensorChoice selected = sensor.SelectedItem as SensorChoice; sensor.BeginUpdate(); sensor.Items.Clear();
+            foreach (SensorChoice choice in choices) if (choice.Matches(search.Text)) sensor.Items.Add(choice);
+            sensor.EndUpdate(); if (selected != null) sensor.SelectedItem = selected; if (sensor.SelectedIndex < 0 && sensor.Items.Count > 0) sensor.SelectedIndex = 0;
+            resultCount.Text = sensor.Items.Count + " of " + choices.Count + " sensors"; UpdateAddState();
+        }
+
+        private void UpdateAddState() { add.Enabled = SelectedType == DashboardBoxType.Section || sensor.SelectedItem != null; }
         private static Label LabelFor(string text) { Label label = new Label(); label.Text = text; label.Dock = DockStyle.Fill; label.TextAlign = ContentAlignment.MiddleLeft; return label; }
     }
-
     internal sealed class DashboardEditorControl : UserControl
     {
         private readonly WidgetConfig config; private readonly List<SensorReading> readings; private readonly List<SensorChoice> choices;

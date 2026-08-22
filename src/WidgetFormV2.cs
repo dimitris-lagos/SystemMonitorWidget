@@ -23,9 +23,9 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private bool dragging; private Point dragStart; private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem;
+        private bool dragging; private Point dragStart; private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem;
 
-        private float UiScale { get { if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
+        private float UiScale { get { if (config.UiScaleMode == 75) return 0.75f; if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
         private int CanvasWidth { get { return config.Width; } }
         private int LogicalHeight { get { int rows = Math.Max(4, config.ActiveDashboardRows); return DashboardTop + rows * SlotHeight + Math.Max(0, rows - 1) * RowGap + BottomPadding; } }
 
@@ -47,7 +47,8 @@ namespace VegaDesktopWidget
             topmostItem = new ToolStripMenuItem("Always on top"); topmostItem.Checked = config.AlwaysOnTop;
             topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; config.Save(); };
             menu.Items.Add(topmostItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
-            scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
+            scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
+            processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
             menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); }); ContextMenuStrip = menu;
         }
@@ -56,13 +57,17 @@ namespace VegaDesktopWidget
         private void SetGridColumns(int columns) { config.GridColumns = columns == 3 ? 3 : 4; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateGridMenu(); config.Save(); RefreshSensors(); }
         private void UpdateGridMenu() { if (gridItem == null) return; foreach (ToolStripItem raw in gridItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.GridColumns; } }
         private void AddScaleMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetUiScale(mode); }; scaleItem.DropDownItems.Add(item); }
-        private void SetUiScale(int mode) { config.UiScaleMode = mode == 67 || mode == 50 || mode == 33 || mode == 25 ? mode : 100; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateScaleMenu(); config.Save(); Invalidate(); }
+        private void SetUiScale(int mode) { config.UiScaleMode = mode == 75 || mode == 67 || mode == 50 || mode == 33 || mode == 25 ? mode : 100; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateScaleMenu(); config.Save(); Invalidate(); }
         private void UpdateScaleMenu() { if (scaleItem == null) return; foreach (ToolStripItem raw in scaleItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.UiScaleMode; } }
+        private void AddProcessMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetProcessMode(mode); }; processItem.DropDownItems.Add(item); }
+        private void SetProcessMode(int mode) { config.ProcessStripMode = Math.Max(0, Math.Min(2, mode)); topProcesses.Clear(); UpdateProcessMenu(); config.Save(); RefreshSensors(); }
+        private void UpdateProcessMenu() { if (processItem == null) return; foreach (ToolStripItem raw in processItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.ProcessStripMode; } }
         private void ApplyWidgetSize() { float scale = UiScale; Size scaled = new Size(Math.Max(1, (int)Math.Round(config.Width * scale)), Math.Max(1, (int)Math.Round(LogicalHeight * scale))); MinimumSize = Size.Empty; MaximumSize = Size.Empty; Size = scaled; MinimumSize = scaled; MaximumSize = scaled; }
 
         private void RefreshSensors()
         {
-            readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal); topProcesses = processSampler.SampleTopByMemory(3);
+            readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal);
+            if (config.ProcessStripMode == 0) topProcesses.Clear(); else topProcesses = processSampler.SampleTop(3, config.ProcessStripMode == 1);
             foreach (DashboardItem item in config.ActiveDashboard)
             {
                 if (item.BoxType == DashboardBoxType.Section) continue;
@@ -91,7 +96,7 @@ namespace VegaDesktopWidget
         private double? ItemValue(DashboardItem item)
         {
             if (item.SensorKey == "__RAM_USED__") return ramAvailable ? (double?)ramUsed : null;
-            SensorReading reading = Resolve(item); return reading == null ? (double?)null : reading.Value;
+            SensorReading reading = Resolve(item); return reading == null || Double.IsNaN(reading.Value) || Double.IsInfinity(reading.Value) ? (double?)null : reading.Value;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -114,6 +119,7 @@ namespace VegaDesktopWidget
 
         private void DrawProcessStrip(Graphics g, RectangleF area)
         {
+            if (config.ProcessStripMode == 0) return;
             if (topProcesses.Count == 0)
             {
                 DrawText(g, "Collecting process activity", 7f, FontStyle.Regular, Color.FromArgb(135, 148, 164), area, StringAlignment.Near);
@@ -205,14 +211,14 @@ namespace VegaDesktopWidget
             return minimum.ToString("0.##", CultureInfo.InvariantCulture) + "–" + maximum.ToString("0.##", CultureInfo.InvariantCulture) + suffix;
         }
 
-        private static string Format(SensorReading reading) { return reading == null ? "—" : FormatValue(reading.Value, reading.Unit); }
+        private static string Format(SensorReading reading) { return reading == null || Double.IsNaN(reading.Value) || Double.IsInfinity(reading.Value) ? "—" : FormatValue(reading.Value, reading.Unit); }
         private static string FormatValue(double value, string unit)
         {
             string u = unit == null ? "" : unit.Trim();
             if (u.Equals("°C", StringComparison.OrdinalIgnoreCase)) return Math.Round(value).ToString("0") + "°";
             if (u == "%") return Math.Round(value).ToString("0") + "%";
             if (u.Equals("MHz", StringComparison.OrdinalIgnoreCase)) return value >= 1000 ? (value / 1000.0).ToString("0.00", CultureInfo.InvariantCulture) + " GHz" : Math.Round(value).ToString("0") + " MHz";
-            if (u.Equals("MB", StringComparison.OrdinalIgnoreCase) && value >= 1024) return (value / 1024.0).ToString("0.00", CultureInfo.InvariantCulture) + " GB";
+            if (u.Equals("MB", StringComparison.OrdinalIgnoreCase) && value >= 1024) return (value / 1024.0).ToString("0.0", CultureInfo.InvariantCulture) + " GB";
             if (u == "W") return value.ToString(value < 100 ? "0.0" : "0", CultureInfo.InvariantCulture) + " W";
             if (u == "RPM") return Math.Round(value).ToString("0") + " RPM";
             return value.ToString(Math.Abs(value) < 10 ? "0.00" : "0", CultureInfo.InvariantCulture) + (u.Length > 0 ? " " + u : "");

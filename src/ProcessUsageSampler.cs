@@ -33,12 +33,13 @@ namespace VegaDesktopWidget
         private List<ProcessUsage> cached = new List<ProcessUsage>();
         private long previousTimestamp;
         private long lastSampleTimestamp;
+        private bool cachedSortByCpu;
         private readonly int ownProcessId = Process.GetCurrentProcess().Id;
 
-        public List<ProcessUsage> SampleTopByMemory(int count)
+        public List<ProcessUsage> SampleTop(int count, bool sortByCpu)
         {
             long now = Stopwatch.GetTimestamp();
-            if (lastSampleTimestamp != 0 && SecondsBetween(lastSampleTimestamp, now) < 0.75) return new List<ProcessUsage>(cached);
+            if (lastSampleTimestamp != 0 && cachedSortByCpu == sortByCpu && SecondsBetween(lastSampleTimestamp, now) < 0.75) return new List<ProcessUsage>(cached);
 
             double elapsedMilliseconds = previousTimestamp == 0 ? 0.0 : SecondsBetween(previousTimestamp, now) * 1000.0;
             Dictionary<int, ProcessPoint> next = new Dictionary<int, ProcessPoint>();
@@ -82,6 +83,11 @@ namespace VegaDesktopWidget
 
             List<Aggregate> ordered = new List<Aggregate>(groups.Values);
             ordered.Sort(delegate(Aggregate a, Aggregate b) {
+                if (sortByCpu)
+                {
+                    int byCpu = b.CpuPercent.CompareTo(a.CpuPercent);
+                    if (byCpu != 0) return byCpu;
+                }
                 int byMemory = b.WorkingSetBytes.CompareTo(a.WorkingSetBytes);
                 return byMemory != 0 ? byMemory : StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
             });
@@ -97,6 +103,7 @@ namespace VegaDesktopWidget
                 });
             }
             cached = result;
+            cachedSortByCpu = sortByCpu;
             return new List<ProcessUsage>(cached);
         }
 

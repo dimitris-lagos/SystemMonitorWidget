@@ -8,7 +8,7 @@ namespace VegaDesktopWidget
     internal sealed class SettingsForm : Form
     {
         private readonly WidgetConfig working; private readonly List<SensorReading> readings;
-        private static readonly int[] ScaleModes = new int[] { 100, 67, 50, 33, 25 };
+        private static readonly int[] ScaleModes = new int[] { 100, 75, 67, 50, 33, 25 };
         private CheckBox topmost, graphs, startup, launchHwinfo;
         private NumericUpDown width, opacity, refresh;
         private ComboBox uiScale, gridLayout;
@@ -102,7 +102,7 @@ namespace VegaDesktopWidget
         private static ComboBox AddScaleChoice(TableLayoutPanel table, int mode)
         {
             Label name = NameLabel("UI scale"); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
-            ComboBox control = new ComboBox(); control.DropDownStyle = ComboBoxStyle.DropDownList; control.Width = 145; control.Items.AddRange(new object[] { "100% (1/1)", "67% (2/3)", "50% (1/2)", "33% (1/3)", "25% (1/4)" });
+            ComboBox control = new ComboBox(); control.DropDownStyle = ComboBoxStyle.DropDownList; control.Width = 145; control.Items.AddRange(new object[] { "100% (1/1)", "75% (3/4)", "67% (2/3)", "50% (1/2)", "33% (1/3)", "25% (1/4)" });
             control.SelectedIndex = 0; for (int i = 0; i < ScaleModes.Length; i++) if (ScaleModes[i] == mode) { control.SelectedIndex = i; break; }
             Label hint = new Label(); hint.Text = "scales the complete widget"; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
             panel.Controls.Add(control); panel.Controls.Add(hint); table.Controls.Add(name); table.Controls.Add(panel); return control;
@@ -113,7 +113,7 @@ namespace VegaDesktopWidget
         private static WidgetConfig Clone(WidgetConfig source)
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns;
-            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO;
+            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO;
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();
             foreach (DashboardItem item in source.Dashboard3) copy.Dashboard3.Add(item.Clone()); foreach (DashboardItem item in source.Dashboard4) copy.Dashboard4.Add(item.Clone());

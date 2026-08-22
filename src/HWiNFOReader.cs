@@ -80,7 +80,7 @@ namespace VegaDesktopWidget
                     reading.Label = String.IsNullOrWhiteSpace(userLabel) ? reading.OriginalLabel : userLabel;
                     reading.Unit = ReadAnsi(view, p + 268, 16); reading.Value = ReadDouble(view, p + 284);
                     reading.Minimum = ReadDouble(view, p + 292); reading.Maximum = ReadDouble(view, p + 300); reading.Average = ReadDouble(view, p + 308);
-                    if (!Double.IsNaN(reading.Value) && !Double.IsInfinity(reading.Value)) result.Add(reading);
+                    result.Add(reading);
                 }
                 status = "Live · " + result.Count + " readings"; return result;
             }
