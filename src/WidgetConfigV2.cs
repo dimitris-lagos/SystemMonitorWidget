@@ -14,6 +14,8 @@ namespace VegaDesktopWidget
         public string HeaderTitle = DefaultHeaderTitle;
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
         public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false;
+        public bool FanControlEnabled = false;
+        public List<FanProfile> FanProfiles = new List<FanProfile>();
         public Dictionary<string, string> RoleKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> RoleLabels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public List<DashboardItem> Dashboard3 = new List<DashboardItem>(), Dashboard4 = new List<DashboardItem>();
@@ -50,6 +52,8 @@ namespace VegaDesktopWidget
                 else if (k.Equals("AlwaysOnTop", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AlwaysOnTop = f;
                 else if (k.Equals("ShowGraphs", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.ShowGraphs = f;
                 else if (k.Equals("LaunchHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.LaunchHWiNFO = f;
+                else if (k.Equals("FanControlEnabled", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.FanControlEnabled = f;
+                else if (k.StartsWith("FanProfile.", StringComparison.OrdinalIgnoreCase)) { FanProfile profile = FanProfile.Deserialize(v); if (profile != null) c.FanProfiles.Add(profile); }
                 else if (k.Equals("DashboardRows3", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows3 = Math.Max(4, Math.Min(30, n));
                 else if (k.Equals("DashboardRows4", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows4 = Math.Max(4, Math.Min(30, n));
                 else if (k.StartsWith("Item3.", StringComparison.OrdinalIgnoreCase)) { DashboardItem item = DashboardItem.Deserialize(v); if (item != null) c.Dashboard3.Add(item); }
@@ -73,6 +77,8 @@ namespace VegaDesktopWidget
             l.Add("HeaderTitle=" + NormalizeHeaderTitle(HeaderTitle));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
             l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO);
+            l.Add("FanControlEnabled=" + FanControlEnabled);
+            for (int i = 0; i < FanProfiles.Count; i++) l.Add("FanProfile." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + FanProfiles[i].Serialize());
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);
             for (int i = 0; i < Dashboard3.Count; i++) l.Add("Item3." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + Dashboard3[i].Serialize());
             for (int i = 0; i < Dashboard4.Count; i++) l.Add("Item4." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + Dashboard4[i].Serialize());

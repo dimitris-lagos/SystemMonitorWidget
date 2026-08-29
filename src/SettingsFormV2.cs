@@ -7,18 +7,19 @@ namespace VegaDesktopWidget
 {
     internal sealed class SettingsForm : Form
     {
-        private readonly WidgetConfig working; private readonly List<SensorReading> readings;
+        private readonly WidgetConfig working; private readonly List<SensorReading> readings; private readonly FanControlClient fanClient;
         private static readonly int[] ScaleModes = new int[] { 100, 75, 67, 50, 33, 25 };
         private CheckBox topmost, graphs, startup, launchHwinfo;
         private NumericUpDown width, opacity, refresh;
         private TextBox headerTitle;
         private ComboBox uiScale, gridLayout;
-        private DashboardEditorControl dashboardEditor;
-        public WidgetConfig Result { get { return working; } }
+        private DashboardEditorControl dashboardEditor; private FanControlSettingsPanel fanControl;
+        public WidgetConfig Result { get { return Clone(working); } }
+        public event EventHandler Applied;
 
-        public SettingsForm(WidgetConfig source, List<SensorReading> available)
+        public SettingsForm(WidgetConfig source, List<SensorReading> available, FanControlClient controller)
         {
-            working = Clone(source); readings = available == null ? new List<SensorReading>() : available;
+            working = Clone(source); readings = available == null ? new List<SensorReading>() : available; fanClient = controller;
             Text = "System Monitor Widget · Configure"; Font = new Font("Segoe UI", 9f); StartPosition = FormStartPosition.CenterParent;
             ClientSize = new Size(1180, 780); MinimumSize = new Size(1000, 700); BackColor = Color.FromArgb(245, 247, 250); BuildUi();
         }
@@ -27,11 +28,12 @@ namespace VegaDesktopWidget
         {
             TableLayoutPanel shell = new TableLayoutPanel(); shell.Dock = DockStyle.Fill; shell.ColumnCount = 1; shell.RowCount = 2;
             shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            TabControl tabs = new TabControl(); tabs.Dock = DockStyle.Fill; tabs.TabPages.Add(BuildGeneralTab()); tabs.TabPages.Add(BuildDashboardTab());
+            TabControl tabs = new TabControl(); tabs.Dock = DockStyle.Fill; tabs.TabPages.Add(BuildGeneralTab()); tabs.TabPages.Add(BuildDashboardTab()); tabs.TabPages.Add(BuildFanControlTab());
             FlowLayoutPanel footer = new FlowLayoutPanel(); footer.Dock = DockStyle.Fill; footer.FlowDirection = FlowDirection.RightToLeft; footer.WrapContents = false; footer.Padding = new Padding(10, 13, 10, 10); footer.BackColor = Color.FromArgb(245, 247, 250);
             Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Size = new Size(90, 30); cancel.Margin = new Padding(8, 0, 0, 0);
             Button save = new Button(); save.Text = "OK"; save.Size = new Size(100, 30); save.Margin = new Padding(8, 0, 0, 0); save.Click += SaveClick;
-            footer.Controls.Add(cancel); footer.Controls.Add(save); shell.Controls.Add(tabs, 0, 0); shell.Controls.Add(footer, 0, 1); Controls.Add(shell); AcceptButton = save; CancelButton = cancel;
+            Button apply = new Button(); apply.Text = "Apply"; apply.Size = new Size(100, 30); apply.Margin = new Padding(8, 0, 0, 0); apply.Click += ApplyClick;
+            footer.Controls.Add(cancel); footer.Controls.Add(save); footer.Controls.Add(apply); shell.Controls.Add(tabs, 0, 0); shell.Controls.Add(footer, 0, 1); Controls.Add(shell); AcceptButton = save; CancelButton = cancel;
         }
 
         private TabPage BuildGeneralTab()
@@ -60,20 +62,31 @@ namespace VegaDesktopWidget
             dashboardEditor = new DashboardEditorControl(working, readings); page.Controls.Add(dashboardEditor); return page;
         }
 
-        private void SaveClick(object sender, EventArgs e)
+        private TabPage BuildFanControlTab()
+        {
+            TabPage page = new TabPage("Fan Control"); page.BackColor = Color.White;
+            fanControl = new FanControlSettingsPanel(working, readings, fanClient); page.Controls.Add(fanControl); return page;
+        }
+
+        private void SaveClick(object sender, EventArgs e) { ApplyChanges(true); }
+        private void ApplyClick(object sender, EventArgs e) { ApplyChanges(false); }
+
+        private void ApplyChanges(bool close)
         {
             try
             {
                 string error; if (!dashboardEditor.ValidateDashboard(out error)) { MessageBox.Show(this, error, "Dashboard configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+                if (!fanControl.ValidateAndApply(out error)) { MessageBox.Show(this, error, "Fan Control configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 working.AlwaysOnTop = topmost.Checked; working.ShowGraphs = graphs.Checked; working.LaunchHWiNFO = launchHwinfo.Checked;
                 working.HeaderTitle = WidgetConfig.NormalizeHeaderTitle(headerTitle.Text);
                 working.UiScaleMode = ScaleModes[Math.Max(0, uiScale.SelectedIndex)]; working.GridColumns = gridLayout.SelectedIndex == 0 ? 3 : 4;
                 working.Width = (int)width.Value; working.OpacityPercent = (int)opacity.Value; working.RefreshMilliseconds = (int)refresh.Value;
-                WidgetConfig.SetStartup(startup.Checked); working.Save(); DialogResult = DialogResult.OK; Close();
+                WidgetConfig.SetStartup(startup.Checked); working.Save();
+                if (close) { DialogResult = DialogResult.OK; Close(); }
+                else if (Applied != null) Applied(this, EventArgs.Empty);
             }
             catch (Exception ex) { MessageBox.Show(this, "Could not save settings: " + ex.Message, "System Monitor Widget", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
-
         private static void AddHeading(TableLayoutPanel table, string text)
         {
             Label heading = new Label(); heading.Text = text.ToUpperInvariant(); heading.AutoSize = true; heading.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
@@ -123,11 +136,12 @@ namespace VegaDesktopWidget
         private static WidgetConfig Clone(WidgetConfig source)
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
-            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO;
+            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();
             foreach (DashboardItem item in source.Dashboard3) copy.Dashboard3.Add(item.Clone()); foreach (DashboardItem item in source.Dashboard4) copy.Dashboard4.Add(item.Clone());
             foreach (KeyValuePair<string, string> pair in source.RoleKeys) copy.RoleKeys[pair.Key] = pair.Value; foreach (KeyValuePair<string, string> pair in source.RoleLabels) copy.RoleLabels[pair.Key] = pair.Value;
+            copy.FanProfiles.Clear(); foreach (FanProfile profile in source.FanProfiles) copy.FanProfiles.Add(profile.Clone());
             return copy;
         }
     }

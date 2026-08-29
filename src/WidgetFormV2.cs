@@ -51,6 +51,8 @@ namespace VegaDesktopWidget
         private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
         private readonly ProcessUsageSampler processSampler = new ProcessUsageSampler();
+        private readonly FanControlClient fanController = new FanControlClient();
+        private bool settingsOpen;
         private WidgetConfig config;
         private List<SensorReading> readings = new List<SensorReading>();
         private List<ProcessUsage> topProcesses = new List<ProcessUsage>();
@@ -77,7 +79,7 @@ namespace VegaDesktopWidget
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
             BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
             Shown += delegate { RefreshSensors(); EnsureGearWindow(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
-            FormClosed += delegate { if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
+            FormClosed += delegate { fanController.Dispose(); if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
             LocationChanged += delegate { SyncGearWindow(); }; SizeChanged += delegate { SyncGearWindow(); }; VisibleChanged += delegate { SyncGearWindow(); };
             if (config.LaunchHWiNFO) LaunchHWiNFO();
         }
@@ -109,6 +111,7 @@ namespace VegaDesktopWidget
         private void RefreshSensors()
         {
             readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal);
+            if (!settingsOpen) fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
             if (config.ProcessStripMode == 0) topProcesses.Clear(); else topProcesses = processSampler.SampleTop(3, config.ProcessStripMode == 1);
             foreach (DashboardItem item in config.ActiveDashboard)
             {
@@ -299,7 +302,31 @@ namespace VegaDesktopWidget
         }
 
         private Point ClampLocation(Point p) { Rectangle work = Screen.PrimaryScreen.WorkingArea; return new Point(Math.Max(work.Left, Math.Min(work.Right - Width, p.X)), Math.Max(work.Top, Math.Min(work.Bottom - Height, p.Y))); }
-        private void ShowSettings() { using (SettingsForm form = new SettingsForm(config, readings)) { if (form.ShowDialog(this) != DialogResult.OK) return; config = form.Result; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds; topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); RefreshSensors(); } }
+        private void ShowSettings()
+        {
+            bool accepted = false; settingsOpen = true;
+            try
+            {
+                using (SettingsForm form = new SettingsForm(config, readings, fanController))
+                {
+                    form.Applied += delegate { ApplySettingsResult(form.Result); };
+                    accepted = form.ShowDialog(this) == DialogResult.OK;
+                    if (accepted) ApplySettingsResult(form.Result);
+                }
+            }
+            finally { settingsOpen = false; }
+            if (accepted) RefreshSensors(); else fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
+        }
+
+        private void ApplySettingsResult(WidgetConfig updated)
+        {
+            config = updated; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop;
+            Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds;
+            topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); Invalidate();
+            fanController.PrepareConfigurationApply(); fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
+            if (config.FanControlEnabled && fanController.Status.StartsWith("Fan control error", StringComparison.OrdinalIgnoreCase))
+                MessageBox.Show(this, fanController.Status, "Fan Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; string path = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE"; if (File.Exists(path)) Process.Start(path); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }
     }
 }
