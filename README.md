@@ -31,7 +31,7 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Optional recorded minimum and maximum on Big metric components.
 - Duplicate, delete, and reset-layout actions.
 - Interface scaling at 100%, 75%, 67%, 50%, 33%, and 25%.
-- Always-on-top, opacity, refresh interval, and a checkable Start with Windows gear-menu option.
+- Always-on-top, opacity, refresh interval, and Start with Windows controls in Appearance & behavior.
 - Optional Super I/O fan control with automatic channel detection through the bundled OpenHardwareMonitor library.
 - Four-point interactive fan curves bound to any live HWiNFO temperature sensor.
 - Each control can be paired with a live Super I/O RPM sensor; matching control/fan indices are paired automatically after scanning.
@@ -74,7 +74,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.5.2-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.5.3-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
@@ -82,9 +82,9 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.5.2-win-x64.zip` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.5.3-win-x64.zip` from the [latest release](../../releases/latest).
 2. Extract all four files into the same folder.
 3. Open HWiNFO64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.5.2.exe`.
+5. Run `SystemMonitorWidget-v2.5.3.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

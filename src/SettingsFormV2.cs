@@ -46,7 +46,7 @@ namespace VegaDesktopWidget
             topmost = AddCheck(table, "Always on top", "Keep the monitor above normal windows.", working.AlwaysOnTop);
             graphs = AddCheck(table, "Live history graphs", "Draw graph history for graph components.", working.ShowGraphs);
             launchHwinfo = AddCheck(table, "Start HWiNFO if needed", "Use HWiNFO's saved Sensors-only and Auto Start settings.", working.LaunchHWiNFO);
-            startup = AddCheck(table, "Start widget with Windows", "Uses your current-user Startup registry entry.", WidgetConfig.IsStartupEnabled());
+            startup = AddCheck(table, "Start with Windows", "Launch the widget automatically when you sign in.", WidgetConfig.IsStartupEnabled());
             AddHeading(table, "Size and refresh");
             gridLayout = AddGridChoice(table, working.GridColumns); uiScale = AddScaleChoice(table, working.UiScaleMode);
             width = AddNumber(table, "Base widget width", "340–600 pixels before scaling", working.Width, 340, 600, 10);

@@ -61,7 +61,7 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, startupItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
+        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
         private int lastMenuAppCloseTick = -10000;
         private bool draggingHeader;
         private Point dragMouseStart, dragWindowStart;
@@ -123,18 +123,15 @@ namespace VegaDesktopWidget
 
         private void BuildMenu()
         {
-            menu = new ContextMenuStrip(); menu.Closed += MenuClosed; menu.Opening += delegate { UpdateStartupMenu(); }; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
+            menu = new ContextMenuStrip(); menu.Closed += MenuClosed; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
             topmostItem = new ToolStripMenuItem("Always on top"); topmostItem.Checked = config.AlwaysOnTop;
             topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; SyncGearWindow(); config.Save(); };
-            menu.Items.Add(topmostItem); startupItem = new ToolStripMenuItem("Start with Windows"); startupItem.Click += delegate { WidgetConfig.SetStartup(!WidgetConfig.IsStartupEnabled()); UpdateStartupMenu(); }; UpdateStartupMenu(); menu.Items.Add(startupItem);
-            gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
+            menu.Items.Add(topmostItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
             scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
             menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); });
         }
-
-        private void UpdateStartupMenu() { if (startupItem != null) startupItem.Checked = WidgetConfig.IsStartupEnabled(); }
 
         private void AddGridMenuItem(string text, int columns) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = columns; item.Click += delegate { SetGridColumns(columns); }; gridItem.DropDownItems.Add(item); }
         private void SetGridColumns(int columns) { config.GridColumns = columns == 3 ? 3 : 4; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateGridMenu(); config.Save(); RefreshSensors(); }
