@@ -13,7 +13,7 @@ namespace VegaDesktopWidget
         public int ProcessStripMode = 2;
         public string HeaderTitle = DefaultHeaderTitle;
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
-        public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false;
+        public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false, AutoRestartHWiNFO = false;
         public bool FanControlEnabled = false;
         public List<FanProfile> FanProfiles = new List<FanProfile>();
         public Dictionary<string, string> RoleKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -52,6 +52,7 @@ namespace VegaDesktopWidget
                 else if (k.Equals("AlwaysOnTop", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AlwaysOnTop = f;
                 else if (k.Equals("ShowGraphs", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.ShowGraphs = f;
                 else if (k.Equals("LaunchHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.LaunchHWiNFO = f;
+                else if (k.Equals("AutoRestartHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AutoRestartHWiNFO = f;
                 else if (k.Equals("FanControlEnabled", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.FanControlEnabled = f;
                 else if (k.StartsWith("FanProfile.", StringComparison.OrdinalIgnoreCase)) { FanProfile profile = FanProfile.Deserialize(v); if (profile != null) c.FanProfiles.Add(profile); }
                 else if (k.Equals("DashboardRows3", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows3 = Math.Max(4, Math.Min(30, n));
@@ -76,7 +77,7 @@ namespace VegaDesktopWidget
             l.Add("ProcessStripMode=" + ProcessStripMode.ToString(CultureInfo.InvariantCulture));
             l.Add("HeaderTitle=" + NormalizeHeaderTitle(HeaderTitle));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
-            l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO);
+            l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO); l.Add("AutoRestartHWiNFO=" + AutoRestartHWiNFO);
             l.Add("FanControlEnabled=" + FanControlEnabled);
             for (int i = 0; i < FanProfiles.Count; i++) l.Add("FanProfile." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + FanProfiles[i].Serialize());
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);

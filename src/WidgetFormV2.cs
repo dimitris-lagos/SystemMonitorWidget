@@ -50,6 +50,7 @@ namespace VegaDesktopWidget
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
         private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
+        private readonly Timer hwinfoMaintenanceTimer = new Timer();
         private readonly ProcessUsageSampler processSampler = new ProcessUsageSampler();
         private readonly FanControlClient fanController = new FanControlClient();
         private bool settingsOpen;
@@ -63,6 +64,10 @@ namespace VegaDesktopWidget
         private string status = "Starting";
         private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
         private int lastMenuAppCloseTick = -10000;
+        private const string HWiNFOExecutable = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE";
+        private static readonly TimeSpan HWiNFORestartInterval = TimeSpan.FromMinutes(690);
+        private bool hwinfoRestarting;
+        private DateTime hwinfoRestartRetryUtc = DateTime.MinValue;
         private bool draggingHeader;
         private Point dragMouseStart, dragWindowStart;
 
@@ -80,8 +85,9 @@ namespace VegaDesktopWidget
             ApplyWidgetSize(); Location = ClampLocation(new Point(config.Left, config.Top));
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
             BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
-            Shown += delegate { RefreshSensors(); EnsureGearWindow(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
-            FormClosed += delegate { fanController.Dispose(); if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
+            hwinfoMaintenanceTimer.Interval = 60000; hwinfoMaintenanceTimer.Tick += delegate { CheckHWiNFOAutoRestart(); }; hwinfoMaintenanceTimer.Start();
+            Shown += delegate { RefreshSensors(); EnsureGearWindow(); CheckHWiNFOAutoRestart(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
+            FormClosed += delegate { hwinfoMaintenanceTimer.Stop(); hwinfoMaintenanceTimer.Dispose(); fanController.Dispose(); if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
             LocationChanged += delegate { SyncGearWindow(); }; SizeChanged += delegate { SyncGearWindow(); }; VisibleChanged += delegate { SyncGearWindow(); };
             MouseDown += HeaderMouseDown; MouseMove += HeaderMouseMove; MouseUp += HeaderMouseUp; MouseCaptureChanged += HeaderMouseCaptureChanged;
             if (config.LaunchHWiNFO) LaunchHWiNFO();
@@ -363,7 +369,73 @@ namespace VegaDesktopWidget
             fanController.PrepareConfigurationApply(); fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
             if (config.FanControlEnabled && fanController.Status.StartsWith("Fan control error", StringComparison.OrdinalIgnoreCase))
                 MessageBox.Show(this, fanController.Status, "Fan Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            CheckHWiNFOAutoRestart();
         }
-        private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; string path = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE"; if (File.Exists(path)) Process.Start(path); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }
+        private static bool IsHWiNFORestartDue(DateTime startedUtc, DateTime nowUtc) { return nowUtc - startedUtc >= HWiNFORestartInterval; }
+
+        private void CheckHWiNFOAutoRestart()
+        {
+            if (!config.AutoRestartHWiNFO || hwinfoRestarting || DateTime.UtcNow < hwinfoRestartRetryUtc) return;
+            Process[] processes; try { processes = Process.GetProcessesByName("HWiNFO64"); } catch { return; }
+            try
+            {
+                foreach (Process process in processes)
+                {
+                    try { if (IsHWiNFORestartDue(process.StartTime.ToUniversalTime(), DateTime.UtcNow)) { RestartHWiNFOAsync(); return; } }
+                    catch { }
+                }
+            }
+            finally { foreach (Process process in processes) process.Dispose(); }
+        }
+
+        private void RestartHWiNFOAsync()
+        {
+            if (hwinfoRestarting) return; hwinfoRestarting = true;
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                bool success = false; string message = "HWiNFO64 restart failed";
+                try
+                {
+                    Process[] processes = Process.GetProcessesByName("HWiNFO64");
+                    try
+                    {
+                        foreach (Process process in processes)
+                        {
+                            if (!process.HasExited)
+                            {
+                                bool closing = process.CloseMainWindow();
+                                if (closing) process.WaitForExit(10000);
+                                if (!process.HasExited) { process.Kill(); process.WaitForExit(5000); }
+                            }
+                        }
+                    }
+                    finally { foreach (Process process in processes) process.Dispose(); }
+                    System.Threading.Thread.Sleep(1000);
+                    if (!File.Exists(HWiNFOExecutable)) message = "HWiNFO64 was not found";
+                    else
+                    {
+                        Process[] remaining = Process.GetProcessesByName("HWiNFO64");
+                        try
+                        {
+                            if (remaining.Length > 0) message = "HWiNFO64 did not close";
+                            else { Process started = Process.Start(HWiNFOExecutable); if (started != null) started.Dispose(); success = true; message = "HWiNFO64 restarted"; }
+                        }
+                        finally { foreach (Process process in remaining) process.Dispose(); }
+                    }
+                }
+                catch { message = "Could not restart HWiNFO64"; }
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        hwinfoRestarting = false; hwinfoRestartRetryUtc = success ? DateTime.MinValue : DateTime.UtcNow.AddMinutes(15);
+                        status = message; Invalidate();
+                    });
+                }
+                catch { hwinfoRestarting = false; }
+            });
+        }
+
+        private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; if (File.Exists(HWiNFOExecutable)) Process.Start(HWiNFOExecutable); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }
     }
 }

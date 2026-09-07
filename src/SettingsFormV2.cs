@@ -9,7 +9,7 @@ namespace VegaDesktopWidget
     {
         private readonly WidgetConfig working; private readonly List<SensorReading> readings; private readonly FanControlClient fanClient;
         private static readonly int[] ScaleModes = new int[] { 100, 75, 67, 50, 33, 25 };
-        private CheckBox topmost, graphs, startup, launchHwinfo;
+        private CheckBox topmost, graphs, startup, launchHwinfo, autoRestartHwinfo;
         private NumericUpDown width, opacity, refresh;
         private TextBox headerTitle;
         private ComboBox uiScale, gridLayout;
@@ -46,6 +46,7 @@ namespace VegaDesktopWidget
             topmost = AddCheck(table, "Always on top", "Keep the monitor above normal windows.", working.AlwaysOnTop);
             graphs = AddCheck(table, "Live history graphs", "Draw graph history for graph components.", working.ShowGraphs);
             launchHwinfo = AddCheck(table, "Start HWiNFO if needed", "Use HWiNFO's saved Sensors-only and Auto Start settings.", working.LaunchHWiNFO);
+            autoRestartHwinfo = AddCheck(table, "Autorestart HWiNFO64", "Restart HWiNFO64 after every 11 hours and 30 minutes of process uptime.", working.AutoRestartHWiNFO);
             startup = AddCheck(table, "Start with Windows", "Launch the widget automatically when you sign in.", WidgetConfig.IsStartupEnabled());
             AddHeading(table, "Size and refresh");
             gridLayout = AddGridChoice(table, working.GridColumns); uiScale = AddScaleChoice(table, working.UiScaleMode);
@@ -77,7 +78,7 @@ namespace VegaDesktopWidget
             {
                 string error; if (!dashboardEditor.ValidateDashboard(out error)) { MessageBox.Show(this, error, "Dashboard configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 if (!fanControl.ValidateAndApply(out error)) { MessageBox.Show(this, error, "Fan Control configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
-                working.AlwaysOnTop = topmost.Checked; working.ShowGraphs = graphs.Checked; working.LaunchHWiNFO = launchHwinfo.Checked;
+                working.AlwaysOnTop = topmost.Checked; working.ShowGraphs = graphs.Checked; working.LaunchHWiNFO = launchHwinfo.Checked; working.AutoRestartHWiNFO = autoRestartHwinfo.Checked;
                 working.HeaderTitle = WidgetConfig.NormalizeHeaderTitle(headerTitle.Text);
                 working.UiScaleMode = ScaleModes[Math.Max(0, uiScale.SelectedIndex)]; working.GridColumns = gridLayout.SelectedIndex == 0 ? 3 : 4;
                 working.Width = (int)width.Value; working.OpacityPercent = (int)opacity.Value; working.RefreshMilliseconds = (int)refresh.Value;
@@ -136,7 +137,7 @@ namespace VegaDesktopWidget
         private static WidgetConfig Clone(WidgetConfig source)
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
-            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
+            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.AutoRestartHWiNFO = source.AutoRestartHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();
             foreach (DashboardItem item in source.Dashboard3) copy.Dashboard3.Add(item.Clone()); foreach (DashboardItem item in source.Dashboard4) copy.Dashboard4.Add(item.Clone());
