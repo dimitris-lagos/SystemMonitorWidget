@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace VegaDesktopWidget
@@ -12,6 +13,7 @@ namespace VegaDesktopWidget
         private CheckBox topmost, graphs, startup, launchHwinfo, autoRestartHwinfo;
         private NumericUpDown width, opacity, refresh;
         private TextBox headerTitle;
+        private TextBox hwinfoPath;
         private ComboBox uiScale, gridLayout;
         private DashboardEditorControl dashboardEditor; private FanControlSettingsPanel fanControl;
         public WidgetConfig Result { get { return Clone(working); } }
@@ -43,6 +45,7 @@ namespace VegaDesktopWidget
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 245)); table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             AddHeading(table, "Desktop behavior");
             headerTitle = AddText(table, "Header title", "Editable title shown on the widget.", working.HeaderTitle, 48);
+            hwinfoPath = AddHWiNFOPath(table, working.ResolveHWiNFOExecutablePath());
             topmost = AddCheck(table, "Always on top", "Keep the monitor above normal windows.", working.AlwaysOnTop);
             graphs = AddCheck(table, "Live history graphs", "Draw graph history for graph components.", working.ShowGraphs);
             launchHwinfo = AddCheck(table, "Start HWiNFO if needed", "Use HWiNFO's saved Sensors-only and Auto Start settings.", working.LaunchHWiNFO);
@@ -78,6 +81,13 @@ namespace VegaDesktopWidget
             {
                 string error; if (!dashboardEditor.ValidateDashboard(out error)) { MessageBox.Show(this, error, "Dashboard configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 if (!fanControl.ValidateAndApply(out error)) { MessageBox.Show(this, error, "Fan Control configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+                string selectedHWiNFOPath = WidgetConfig.NormalizeHWiNFOExecutablePath(hwinfoPath.Text);
+                if ((launchHwinfo.Checked || autoRestartHwinfo.Checked) && !WidgetConfig.IsHWiNFOExecutablePath(selectedHWiNFOPath))
+                {
+                    MessageBox.Show(this, "Select a valid HWiNFO64.exe before enabling HWiNFO start or autorestart.", "HWiNFO64 executable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                working.HWiNFOExecutablePath = selectedHWiNFOPath;
                 working.AlwaysOnTop = topmost.Checked; working.ShowGraphs = graphs.Checked; working.LaunchHWiNFO = launchHwinfo.Checked; working.AutoRestartHWiNFO = autoRestartHwinfo.Checked;
                 working.HeaderTitle = WidgetConfig.NormalizeHeaderTitle(headerTitle.Text);
                 working.UiScaleMode = ScaleModes[Math.Max(0, uiScale.SelectedIndex)]; working.GridColumns = gridLayout.SelectedIndex == 0 ? 3 : 4;
@@ -106,6 +116,27 @@ namespace VegaDesktopWidget
             TextBox control = new TextBox(); control.Text = value ?? ""; control.MaxLength = maximumLength; control.Width = 285;
             Label hint = new Label(); hint.Text = description; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
             panel.Controls.Add(control); panel.Controls.Add(hint); table.Controls.Add(name); table.Controls.Add(panel); return control;
+        }
+        private TextBox AddHWiNFOPath(TableLayoutPanel table, string value)
+        {
+            Label name = NameLabel("HWiNFO64 executable"); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
+            TextBox control = new TextBox(); control.Text = value ?? ""; control.Width = 430;
+            Button browse = new Button(); browse.Text = "Browse..."; browse.AutoSize = true; browse.Margin = new Padding(8, 0, 0, 0);
+            browse.Click += delegate
+            {
+                using (OpenFileDialog dialog = new OpenFileDialog())
+                {
+                    dialog.Title = "Select HWiNFO64 executable";
+                    dialog.Filter = "HWiNFO64 executable|HWiNFO64.exe|Executable files|*.exe|All files|*.*";
+                    string current = WidgetConfig.NormalizeHWiNFOExecutablePath(control.Text);
+                    if (File.Exists(current)) { dialog.InitialDirectory = Path.GetDirectoryName(current); dialog.FileName = Path.GetFileName(current); }
+                    if (dialog.ShowDialog(this) == DialogResult.OK) control.Text = dialog.FileName;
+                }
+            };
+            Label hint = new Label(); hint.Text = "portable or installed HWiNFO64.exe"; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
+            panel.Controls.Add(control); panel.Controls.Add(browse); panel.Controls.Add(hint);
+            table.Controls.Add(name); table.Controls.Add(panel);
+            return control;
         }
         private static NumericUpDown AddNumber(TableLayoutPanel table, string label, string description, int value, int minimum, int maximum, int increment)
         {
@@ -138,6 +169,7 @@ namespace VegaDesktopWidget
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
             copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.AutoRestartHWiNFO = source.AutoRestartHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
+            copy.HWiNFOExecutablePath = source.HWiNFOExecutablePath;
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();
             foreach (DashboardItem item in source.Dashboard3) copy.Dashboard3.Add(item.Clone()); foreach (DashboardItem item in source.Dashboard4) copy.Dashboard4.Add(item.Clone());

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using Microsoft.Win32;
@@ -12,6 +13,7 @@ namespace VegaDesktopWidget
         public int Left = 60, Top = 60, Width = 370, UiScaleMode = 100, GridColumns = 4, RefreshMilliseconds = 1000, OpacityPercent = 96;
         public int ProcessStripMode = 2;
         public string HeaderTitle = DefaultHeaderTitle;
+        public string HWiNFOExecutablePath = "";
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
         public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false, AutoRestartHWiNFO = false;
         public bool FanControlEnabled = false;
@@ -53,6 +55,7 @@ namespace VegaDesktopWidget
                 else if (k.Equals("ShowGraphs", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.ShowGraphs = f;
                 else if (k.Equals("LaunchHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.LaunchHWiNFO = f;
                 else if (k.Equals("AutoRestartHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AutoRestartHWiNFO = f;
+                else if (k.Equals("HWiNFOExecutablePath", StringComparison.OrdinalIgnoreCase)) c.HWiNFOExecutablePath = NormalizeHWiNFOExecutablePath(v);
                 else if (k.Equals("FanControlEnabled", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.FanControlEnabled = f;
                 else if (k.StartsWith("FanProfile.", StringComparison.OrdinalIgnoreCase)) { FanProfile profile = FanProfile.Deserialize(v); if (profile != null) c.FanProfiles.Add(profile); }
                 else if (k.Equals("DashboardRows3", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows3 = Math.Max(4, Math.Min(30, n));
@@ -78,6 +81,7 @@ namespace VegaDesktopWidget
             l.Add("HeaderTitle=" + NormalizeHeaderTitle(HeaderTitle));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
             l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO); l.Add("AutoRestartHWiNFO=" + AutoRestartHWiNFO);
+            l.Add("HWiNFOExecutablePath=" + NormalizeHWiNFOExecutablePath(HWiNFOExecutablePath));
             l.Add("FanControlEnabled=" + FanControlEnabled);
             for (int i = 0; i < FanProfiles.Count; i++) l.Add("FanProfile." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + FanProfiles[i].Serialize());
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);
@@ -90,6 +94,40 @@ namespace VegaDesktopWidget
         public List<DashboardItem> ActiveDashboard { get { return GridColumns == 3 ? Dashboard3 : Dashboard4; } }
         public int ActiveDashboardRows { get { return GridColumns == 3 ? DashboardRows3 : DashboardRows4; } }
         public static string NormalizeHeaderTitle(string value) { string title = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim(); if (title.Length == 0) return DefaultHeaderTitle; return title.Length > 48 ? title.Substring(0, 48) : title; }
+        public static string NormalizeHWiNFOExecutablePath(string value)
+        {
+            string path = (value ?? "").Trim();
+            if (path.Length >= 2 && path[0] == '"' && path[path.Length - 1] == '"') path = path.Substring(1, path.Length - 2).Trim();
+            if (path.Length == 0) return "";
+            try { return Path.GetFullPath(Environment.ExpandEnvironmentVariables(path)); }
+            catch { return path; }
+        }
+        public static bool IsHWiNFOExecutablePath(string value)
+        {
+            string path = NormalizeHWiNFOExecutablePath(value);
+            return File.Exists(path) && String.Equals(Path.GetFileName(path), "HWiNFO64.exe", StringComparison.OrdinalIgnoreCase);
+        }
+        public string ResolveHWiNFOExecutablePath()
+        {
+            string configured = NormalizeHWiNFOExecutablePath(HWiNFOExecutablePath);
+            if (configured.Length > 0) return configured;
+            Process[] processes = new Process[0];
+            try
+            {
+                processes = Process.GetProcessesByName("HWiNFO64");
+                foreach (Process process in processes)
+                {
+                    try { string active = NormalizeHWiNFOExecutablePath(process.MainModule.FileName); if (File.Exists(active)) return active; }
+                    catch { }
+                }
+            }
+            catch { }
+            finally { foreach (Process process in processes) process.Dispose(); }
+            string besideWidget = NormalizeHWiNFOExecutablePath(Path.Combine(Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath) ?? "", "HWiNFO64.exe"));
+            if (File.Exists(besideWidget)) return besideWidget;
+            string installed = NormalizeHWiNFOExecutablePath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "HWiNFO64", "HWiNFO64.exe"));
+            return File.Exists(installed) ? installed : "";
+        }
         private static bool IsVersionedDefaultHeaderTitle(string value) { Version version; const string prefix = "SYSTEM MONITOR v"; return value != null && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && Version.TryParse(value.Substring(prefix.Length), out version); }
         public void SetDashboardRows(int columns, int rows) { if (columns == 3) DashboardRows3 = rows; else DashboardRows4 = rows; }
         public static bool IsStartupEnabled() { using (RegistryKey k = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", false)) return k != null && k.GetValue("VegaDesktopWidget") != null; }

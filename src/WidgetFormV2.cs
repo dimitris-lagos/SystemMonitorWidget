@@ -64,7 +64,6 @@ namespace VegaDesktopWidget
         private string status = "Starting";
         private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
         private int lastMenuAppCloseTick = -10000;
-        private const string HWiNFOExecutable = @"C:\Program Files\HWiNFO64\HWiNFO64.EXE";
         private static readonly TimeSpan HWiNFORestartInterval = TimeSpan.FromMinutes(690);
         private bool hwinfoRestarting;
         private DateTime hwinfoRestartRetryUtc = DateTime.MinValue;
@@ -381,15 +380,23 @@ namespace VegaDesktopWidget
             {
                 foreach (Process process in processes)
                 {
-                    try { if (IsHWiNFORestartDue(process.StartTime.ToUniversalTime(), DateTime.UtcNow)) { RestartHWiNFOAsync(); return; } }
+                    try { if (IsHWiNFORestartDue(process.StartTime.ToUniversalTime(), DateTime.UtcNow)) { RestartHWiNFOAsync(config.ResolveHWiNFOExecutablePath()); return; } }
                     catch { }
                 }
             }
             finally { foreach (Process process in processes) process.Dispose(); }
         }
 
-        private void RestartHWiNFOAsync()
+        private void RestartHWiNFOAsync(string executablePath)
         {
+            string executable = WidgetConfig.NormalizeHWiNFOExecutablePath(executablePath);
+            if (!WidgetConfig.IsHWiNFOExecutablePath(executable))
+            {
+                hwinfoRestartRetryUtc = DateTime.UtcNow.AddMinutes(15);
+                status = "HWiNFO64 executable was not found";
+                Invalidate();
+                return;
+            }
             if (hwinfoRestarting) return; hwinfoRestarting = true;
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
@@ -411,14 +418,14 @@ namespace VegaDesktopWidget
                     }
                     finally { foreach (Process process in processes) process.Dispose(); }
                     System.Threading.Thread.Sleep(1000);
-                    if (!File.Exists(HWiNFOExecutable)) message = "HWiNFO64 was not found";
+                    if (!WidgetConfig.IsHWiNFOExecutablePath(executable)) message = "HWiNFO64 executable was not found";
                     else
                     {
                         Process[] remaining = Process.GetProcessesByName("HWiNFO64");
                         try
                         {
                             if (remaining.Length > 0) message = "HWiNFO64 did not close";
-                            else { Process started = Process.Start(HWiNFOExecutable); if (started != null) started.Dispose(); success = true; message = "HWiNFO64 restarted"; }
+                            else { Process started = Process.Start(executable); if (started != null) started.Dispose(); success = true; message = "HWiNFO64 restarted"; }
                         }
                         finally { foreach (Process process in remaining) process.Dispose(); }
                     }
@@ -436,6 +443,22 @@ namespace VegaDesktopWidget
             });
         }
 
-        private void LaunchHWiNFO() { try { if (Process.GetProcessesByName("HWiNFO64").Length > 0) return; if (File.Exists(HWiNFOExecutable)) Process.Start(HWiNFOExecutable); else { status = "HWiNFO64 was not found"; Invalidate(); } } catch { status = "Could not start HWiNFO"; Invalidate(); } }
+        private void LaunchHWiNFO()
+        {
+            Process[] processes = new Process[0];
+            try
+            {
+                processes = Process.GetProcessesByName("HWiNFO64");
+                if (processes.Length > 0) return;
+                string executable = config.ResolveHWiNFOExecutablePath();
+                if (WidgetConfig.IsHWiNFOExecutablePath(executable))
+                {
+                    Process started = Process.Start(executable); if (started != null) started.Dispose();
+                }
+                else { status = "HWiNFO64 executable was not found"; Invalidate(); }
+            }
+            catch { status = "Could not start HWiNFO64"; Invalidate(); }
+            finally { foreach (Process process in processes) process.Dispose(); }
+        }
     }
 }
