@@ -15,7 +15,7 @@ namespace VegaDesktopWidget
         public string HeaderTitle = DefaultHeaderTitle;
         public string HWiNFOExecutablePath = "";
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
-        public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false, AutoRestartHWiNFO = false;
+        public bool AlwaysOnTop = false, LockPosition = false, ShowGraphs = true, LaunchHWiNFO = false, AutoRestartHWiNFO = false;
         public bool FanControlEnabled = false;
         public bool SystemNetworkDefaultsAdded = false;
         public bool CompactNetworkGraphsAdded = false;
@@ -52,7 +52,7 @@ namespace VegaDesktopWidget
                 else if (k.Equals("Width", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.Width = Math.Max(340, Math.Min(600, n));
                 else if (k.Equals("GridColumns", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && (n == 3 || n == 4)) c.GridColumns = n;
                 else if (k.Equals("UiScaleDivisor", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.UiScaleMode = n == 1 ? 100 : n == 2 ? 50 : n == 3 ? 33 : 25;
-                else if (k.Equals("UiScaleMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && (n == 100 || n == 75 || n == 67 || n == 50 || n == 33 || n == 25)) c.UiScaleMode = n;
+                else if (k.Equals("UiScaleMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && IsUiScaleMode(n)) c.UiScaleMode = n;
                 else if (k.Equals("RefreshMilliseconds", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.RefreshMilliseconds = Math.Max(500, Math.Min(5000, n));
                 else if (k.Equals("OpacityPercent", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.OpacityPercent = Math.Max(65, Math.Min(100, n));
                 else if (k.Equals("ProcessStripMode", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n) && n >= 0 && n <= 2) c.ProcessStripMode = n;
@@ -62,6 +62,7 @@ namespace VegaDesktopWidget
                 else if (k.Equals("GpuGraphMin", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.GpuGraphMin = Math.Max(0, n);
                 else if (k.Equals("GpuGraphMax", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.GpuGraphMax = Math.Max(1, n);
                 else if (k.Equals("AlwaysOnTop", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AlwaysOnTop = f;
+                else if (k.Equals("LockPosition", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.LockPosition = f;
                 else if (k.Equals("ShowGraphs", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.ShowGraphs = f;
                 else if (k.Equals("LaunchHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.LaunchHWiNFO = f;
                 else if (k.Equals("AutoRestartHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AutoRestartHWiNFO = f;
@@ -122,7 +123,7 @@ namespace VegaDesktopWidget
             l.Add("ProcessStripMode=" + ProcessStripMode.ToString(CultureInfo.InvariantCulture));
             l.Add("HeaderTitle=" + NormalizeHeaderTitle(HeaderTitle));
             l.Add("CpuGraphMin=" + CpuGraphMin); l.Add("CpuGraphMax=" + CpuGraphMax); l.Add("GpuGraphMin=" + GpuGraphMin); l.Add("GpuGraphMax=" + GpuGraphMax);
-            l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO); l.Add("AutoRestartHWiNFO=" + AutoRestartHWiNFO);
+            l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("LockPosition=" + LockPosition); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO); l.Add("AutoRestartHWiNFO=" + AutoRestartHWiNFO);
             l.Add("HWiNFOExecutablePath=" + NormalizeHWiNFOExecutablePath(HWiNFOExecutablePath));
             l.Add("FanControlEnabled=" + FanControlEnabled);
             l.Add("SystemNetworkDefaultsAdded=" + SystemNetworkDefaultsAdded);
@@ -141,6 +142,8 @@ namespace VegaDesktopWidget
         }
         public List<DashboardItem> ActiveDashboard { get { return GridColumns == 3 ? Dashboard3 : Dashboard4; } }
         public int ActiveDashboardRows { get { return GridColumns == 3 ? DashboardRows3 : DashboardRows4; } }
+        public static bool IsUiScaleMode(int value) { return value == 100 || value == 95 || value == 90 || value == 85 || value == 80 || value == 75 || value == 67 || value == 50 || value == 33 || value == 25; }
+        public static float UiScaleFactor(int value) { if (value == 67) return 2f / 3f; if (value == 33) return 1f / 3f; return IsUiScaleMode(value) ? value / 100f : 1f; }
         private static int[] ParseCustomColors(string value)
         {
             List<int> colors = new List<int>();

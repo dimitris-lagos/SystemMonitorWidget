@@ -24,10 +24,22 @@ namespace VegaDesktopWidget
 
         public void SetLive(bool value) { if (live == value) return; live = value; Invalidate(); }
 
+        public void SetBoundsAndRedraw(Rectangle value)
+        {
+            Bounds = value; RebuildRegion(); Invalidate(); Update();
+        }
+
         protected override void OnResize(EventArgs e)
         {
-            base.OnResize(e); if (Width <= 0 || Height <= 0) return;
+            base.OnResize(e); RebuildRegion(); Invalidate();
+        }
+
+        private void RebuildRegion()
+        {
+            if (Width <= 0 || Height <= 0) return;
+            Region previous = Region;
             using (GraphicsPath path = new GraphicsPath()) { path.AddEllipse(ClientRectangle); Region = new Region(path); }
+            if (previous != null) previous.Dispose();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -68,7 +80,7 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
+        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, lockPositionItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
         private int lastMenuAppCloseTick = -10000;
         private static readonly TimeSpan HWiNFORestartInterval = TimeSpan.FromMinutes(690);
         private bool hwinfoRestarting;
@@ -79,7 +91,7 @@ namespace VegaDesktopWidget
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams { get { CreateParams p = base.CreateParams; p.ExStyle |= 0x08000000 | 0x80; return p; } }
 
-        private float UiScale { get { if (config.UiScaleMode == 75) return 0.75f; if (config.UiScaleMode == 67) return 2f / 3f; if (config.UiScaleMode == 50) return 0.5f; if (config.UiScaleMode == 33) return 1f / 3f; if (config.UiScaleMode == 25) return 0.25f; return 1f; } }
+        private float UiScale { get { return WidgetConfig.UiScaleFactor(config.UiScaleMode); } }
         private int CanvasWidth { get { return config.Width; } }
         private int LogicalHeight { get { int rows = Math.Max(4, config.ActiveDashboardRows); return DashboardTop + rows * SlotHeight + Math.Max(0, rows - 1) * RowGap + BottomPadding; } }
 
@@ -101,7 +113,7 @@ namespace VegaDesktopWidget
         private bool IsHeaderDragPoint(Point point)
         {
             int dragHeight = Math.Max(1, (int)Math.Round(32 * UiScale));
-            return point.Y >= 0 && point.Y < dragHeight && !GearBounds.Contains(point);
+            return !config.LockPosition && point.Y >= 0 && point.Y < dragHeight && !GearBounds.Contains(point);
         }
 
         private void HeaderMouseDown(object sender, MouseEventArgs e)
@@ -137,8 +149,10 @@ namespace VegaDesktopWidget
             menu = new ContextMenuStrip(); menu.Closed += MenuClosed; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
             topmostItem = new ToolStripMenuItem("Always on top"); topmostItem.Checked = config.AlwaysOnTop;
             topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; SyncGearWindow(); config.Save(); };
-            menu.Items.Add(topmostItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
-            scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
+            menu.Items.Add(topmostItem); lockPositionItem = new ToolStripMenuItem("Lock position"); lockPositionItem.Checked = config.LockPosition;
+            lockPositionItem.Click += delegate { config.LockPosition = !config.LockPosition; lockPositionItem.Checked = config.LockPosition; if (config.LockPosition) { FinishHeaderDrag(); Cursor = Cursors.Default; } config.Save(); };
+            menu.Items.Add(lockPositionItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
+            scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("95%", 95); AddScaleMenuItem("90%", 90); AddScaleMenuItem("85%", 85); AddScaleMenuItem("80%", 80); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
             menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); });
@@ -148,7 +162,7 @@ namespace VegaDesktopWidget
         private void SetGridColumns(int columns) { config.GridColumns = columns == 3 ? 3 : 4; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateGridMenu(); config.Save(); RefreshSensors(); }
         private void UpdateGridMenu() { if (gridItem == null) return; foreach (ToolStripItem raw in gridItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.GridColumns; } }
         private void AddScaleMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetUiScale(mode); }; scaleItem.DropDownItems.Add(item); }
-        private void SetUiScale(int mode) { config.UiScaleMode = mode == 75 || mode == 67 || mode == 50 || mode == 33 || mode == 25 ? mode : 100; ApplyWidgetSize(); Location = ClampLocation(Location); UpdateScaleMenu(); config.Save(); Invalidate(); }
+        private void SetUiScale(int mode) { config.UiScaleMode = WidgetConfig.IsUiScaleMode(mode) ? mode : 100; ApplyWidgetSize(); Location = ClampLocation(Location); SyncGearWindow(); UpdateScaleMenu(); config.Save(); Invalidate(); }
         private void UpdateScaleMenu() { if (scaleItem == null) return; foreach (ToolStripItem raw in scaleItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.UiScaleMode; } }
         private void AddProcessMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetProcessMode(mode); }; processItem.DropDownItems.Add(item); }
         private void SetProcessMode(int mode) { config.ProcessStripMode = Math.Max(0, Math.Min(2, mode)); topProcesses.Clear(); UpdateProcessMenu(); config.Save(); RefreshSensors(); }
@@ -336,12 +350,12 @@ namespace VegaDesktopWidget
         {
             if (gearWindow != null && !gearWindow.IsDisposed) { SyncGearWindow(); return; }
             gearWindow = new GearButtonForm(); gearWindow.Pressed += delegate { ToggleMenu(); }; gearWindow.SetLive(readings.Count > 0);
-            Rectangle r = GearBounds; gearWindow.Bounds = new Rectangle(PointToScreen(r.Location), r.Size); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.Show(this); SyncGearWindow();
+            Rectangle r = GearBounds; gearWindow.SetBoundsAndRedraw(new Rectangle(PointToScreen(r.Location), r.Size)); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.Show(this); SyncGearWindow();
         }
         private void SyncGearWindow()
         {
             if (gearWindow == null || gearWindow.IsDisposed) return;
-            Rectangle r = GearBounds; gearWindow.Bounds = new Rectangle(PointToScreen(r.Location), r.Size); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.SetLive(readings.Count > 0);
+            Rectangle r = GearBounds; gearWindow.SetBoundsAndRedraw(new Rectangle(PointToScreen(r.Location), r.Size)); gearWindow.TopMost = config.AlwaysOnTop; gearWindow.SetLive(readings.Count > 0);
             if (Visible && !gearWindow.Visible) gearWindow.Show(this); else if (!Visible && gearWindow.Visible) gearWindow.Hide();
         }
         private void ToggleMenu()
@@ -376,7 +390,7 @@ namespace VegaDesktopWidget
         {
             config = updated; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop;
             Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds;
-            topmostItem.Checked = config.AlwaysOnTop; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); Invalidate();
+            topmostItem.Checked = config.AlwaysOnTop; lockPositionItem.Checked = config.LockPosition; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); Invalidate();
             fanController.PrepareConfigurationApply(); fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
             if (config.FanControlEnabled && fanController.Status.StartsWith("Fan control error", StringComparison.OrdinalIgnoreCase))
                 MessageBox.Show(this, fanController.Status, "Fan Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);

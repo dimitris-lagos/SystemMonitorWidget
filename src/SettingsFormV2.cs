@@ -9,7 +9,7 @@ namespace VegaDesktopWidget
     internal sealed class SettingsForm : Form
     {
         private readonly WidgetConfig working; private readonly List<SensorReading> readings; private readonly FanControlClient fanClient;
-        private static readonly int[] ScaleModes = new int[] { 100, 75, 67, 50, 33, 25 };
+        private static readonly int[] ScaleModes = new int[] { 100, 95, 90, 85, 80, 75, 67, 50, 33, 25 };
         private CheckBox topmost, graphs, startup, launchHwinfo, autoRestartHwinfo;
         private NumericUpDown width, opacity, refresh;
         private TextBox headerTitle;
@@ -157,7 +157,7 @@ namespace VegaDesktopWidget
         private static ComboBox AddScaleChoice(TableLayoutPanel table, int mode)
         {
             Label name = NameLabel("UI scale"); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
-            ComboBox control = new ComboBox(); control.DropDownStyle = ComboBoxStyle.DropDownList; control.Width = 145; control.Items.AddRange(new object[] { "100% (1/1)", "75% (3/4)", "67% (2/3)", "50% (1/2)", "33% (1/3)", "25% (1/4)" });
+            ComboBox control = new ComboBox(); control.DropDownStyle = ComboBoxStyle.DropDownList; control.Width = 145; control.Items.AddRange(new object[] { "100% (1/1)", "95%", "90%", "85%", "80%", "75% (3/4)", "67% (2/3)", "50% (1/2)", "33% (1/3)", "25% (1/4)" });
             control.SelectedIndex = 0; for (int i = 0; i < ScaleModes.Length; i++) if (ScaleModes[i] == mode) { control.SelectedIndex = i; break; }
             Label hint = new Label(); hint.Text = "scales the complete widget"; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
             panel.Controls.Add(control); panel.Controls.Add(hint); table.Controls.Add(name); table.Controls.Add(panel); return control;
@@ -168,7 +168,7 @@ namespace VegaDesktopWidget
         private static WidgetConfig Clone(WidgetConfig source)
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
-            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.AutoRestartHWiNFO = source.AutoRestartHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
+            copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.LockPosition = source.LockPosition; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.AutoRestartHWiNFO = source.AutoRestartHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
             copy.HWiNFOExecutablePath = source.HWiNFOExecutablePath; copy.SystemNetworkDefaultsAdded = source.SystemNetworkDefaultsAdded; copy.CompactNetworkGraphsAdded = source.CompactNetworkGraphsAdded; copy.CompactNetworkExtremaAdded = source.CompactNetworkExtremaAdded; copy.RamColorsEverywhereAdded = source.RamColorsEverywhereAdded;
             copy.CpuSectionNameInitialized = source.CpuSectionNameInitialized; copy.GpuSectionNameInitialized = source.GpuSectionNameInitialized; copy.NetworkSectionNameInitialized = source.NetworkSectionNameInitialized;
             copy.CustomColors = source.CustomColors == null ? new int[0] : (int[])source.CustomColors.Clone();
