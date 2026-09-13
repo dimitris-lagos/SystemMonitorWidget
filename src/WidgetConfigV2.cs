@@ -17,6 +17,12 @@ namespace VegaDesktopWidget
         public int CpuGraphMin = 0, CpuGraphMax = 150, GpuGraphMin = 0, GpuGraphMax = 350;
         public bool AlwaysOnTop = false, ShowGraphs = true, LaunchHWiNFO = false, AutoRestartHWiNFO = false;
         public bool FanControlEnabled = false;
+        public bool SystemNetworkDefaultsAdded = false;
+        public bool CompactNetworkGraphsAdded = false;
+        public bool CompactNetworkExtremaAdded = false;
+        public bool RamColorsEverywhereAdded = false;
+        public bool CpuSectionNameInitialized = false, GpuSectionNameInitialized = false, NetworkSectionNameInitialized = false;
+        public int[] CustomColors = new int[0];
         public List<FanProfile> FanProfiles = new List<FanProfile>();
         public Dictionary<string, string> RoleKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> RoleLabels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -32,7 +38,11 @@ namespace VegaDesktopWidget
 
         public static WidgetConfig Load()
         {
-            WidgetConfig c = new WidgetConfig(); if (!File.Exists(FilePath)) return c;
+            WidgetConfig c = new WidgetConfig();
+            if (!File.Exists(FilePath))
+            {
+                c.Dashboard3 = DashboardDefaults.Create(3); c.Dashboard4 = DashboardDefaults.Create(4); c.SystemNetworkDefaultsAdded = true; c.CompactNetworkGraphsAdded = true; c.CompactNetworkExtremaAdded = true; c.RamColorsEverywhereAdded = true; return c;
+            }
             foreach (string raw in File.ReadAllLines(FilePath))
             {
                 string line = raw.Trim(); if (line.Length == 0 || line.StartsWith("#")) continue;
@@ -57,6 +67,14 @@ namespace VegaDesktopWidget
                 else if (k.Equals("AutoRestartHWiNFO", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.AutoRestartHWiNFO = f;
                 else if (k.Equals("HWiNFOExecutablePath", StringComparison.OrdinalIgnoreCase)) c.HWiNFOExecutablePath = NormalizeHWiNFOExecutablePath(v);
                 else if (k.Equals("FanControlEnabled", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.FanControlEnabled = f;
+                else if (k.Equals("SystemNetworkDefaultsAdded", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.SystemNetworkDefaultsAdded = f;
+                else if (k.Equals("CompactNetworkGraphsAdded", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.CompactNetworkGraphsAdded = f;
+                else if (k.Equals("CompactNetworkExtremaAdded", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.CompactNetworkExtremaAdded = f;
+                else if (k.Equals("RamColorsEverywhereAdded", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.RamColorsEverywhereAdded = f;
+                else if (k.Equals("CpuSectionNameInitialized", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.CpuSectionNameInitialized = f;
+                else if (k.Equals("GpuSectionNameInitialized", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.GpuSectionNameInitialized = f;
+                else if (k.Equals("NetworkSectionNameInitialized", StringComparison.OrdinalIgnoreCase) && Boolean.TryParse(v, out f)) c.NetworkSectionNameInitialized = f;
+                else if (k.Equals("CustomColors", StringComparison.OrdinalIgnoreCase)) c.CustomColors = ParseCustomColors(v);
                 else if (k.StartsWith("FanProfile.", StringComparison.OrdinalIgnoreCase)) { FanProfile profile = FanProfile.Deserialize(v); if (profile != null) c.FanProfiles.Add(profile); }
                 else if (k.Equals("DashboardRows3", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows3 = Math.Max(4, Math.Min(30, n));
                 else if (k.Equals("DashboardRows4", StringComparison.OrdinalIgnoreCase) && Int32.TryParse(v, out n)) c.DashboardRows4 = Math.Max(4, Math.Min(30, n));
@@ -67,8 +85,32 @@ namespace VegaDesktopWidget
             }
             if (c.CpuGraphMax <= c.CpuGraphMin) c.CpuGraphMax = c.CpuGraphMin + 10;
             if (c.GpuGraphMax <= c.GpuGraphMin) c.GpuGraphMax = c.GpuGraphMin + 10;
-            if (c.Dashboard3.Count == 0) c.Dashboard3 = DashboardDefaults.Create(3);
-            if (c.Dashboard4.Count == 0) c.Dashboard4 = DashboardDefaults.Create(4);
+            if (c.Dashboard3.Count == 0) { c.Dashboard3 = DashboardDefaults.Create(3); c.DashboardRows3 = Math.Max(c.DashboardRows3, DashboardDefaults.Rows); }
+            if (c.Dashboard4.Count == 0) { c.Dashboard4 = DashboardDefaults.Create(4); c.DashboardRows4 = Math.Max(c.DashboardRows4, DashboardDefaults.Rows); }
+            if (!c.SystemNetworkDefaultsAdded)
+            {
+                c.DashboardRows3 = DashboardDefaults.AddSystemNetworkDefaults(c.Dashboard3, 3, c.DashboardRows3);
+                c.DashboardRows4 = DashboardDefaults.AddSystemNetworkDefaults(c.Dashboard4, 4, c.DashboardRows4);
+                c.SystemNetworkDefaultsAdded = true;
+            }
+            if (!c.CompactNetworkGraphsAdded)
+            {
+                c.DashboardRows3 = DashboardDefaults.ConvertNetworkMetricsToCompactGraphs(c.Dashboard3, 3, c.DashboardRows3);
+                c.DashboardRows4 = DashboardDefaults.ConvertNetworkMetricsToCompactGraphs(c.Dashboard4, 4, c.DashboardRows4);
+                c.CompactNetworkGraphsAdded = true;
+            }
+            if (!c.CompactNetworkExtremaAdded)
+            {
+                foreach (DashboardItem item in c.Dashboard3) if (item.SensorKey.StartsWith("role:Network", StringComparison.OrdinalIgnoreCase)) item.ShowExtrema = true;
+                foreach (DashboardItem item in c.Dashboard4) if (item.SensorKey.StartsWith("role:Network", StringComparison.OrdinalIgnoreCase)) item.ShowExtrema = true;
+                c.CompactNetworkExtremaAdded = true;
+            }
+            if (!c.RamColorsEverywhereAdded)
+            {
+                foreach (DashboardItem item in c.Dashboard3) item.Colors = DashboardItem.AlertColors();
+                foreach (DashboardItem item in c.Dashboard4) item.Colors = DashboardItem.AlertColors();
+                c.RamColorsEverywhereAdded = true;
+            }
             return c;
         }
 
@@ -83,6 +125,12 @@ namespace VegaDesktopWidget
             l.Add("AlwaysOnTop=" + AlwaysOnTop); l.Add("ShowGraphs=" + ShowGraphs); l.Add("LaunchHWiNFO=" + LaunchHWiNFO); l.Add("AutoRestartHWiNFO=" + AutoRestartHWiNFO);
             l.Add("HWiNFOExecutablePath=" + NormalizeHWiNFOExecutablePath(HWiNFOExecutablePath));
             l.Add("FanControlEnabled=" + FanControlEnabled);
+            l.Add("SystemNetworkDefaultsAdded=" + SystemNetworkDefaultsAdded);
+            l.Add("CompactNetworkGraphsAdded=" + CompactNetworkGraphsAdded);
+            l.Add("CompactNetworkExtremaAdded=" + CompactNetworkExtremaAdded);
+            l.Add("RamColorsEverywhereAdded=" + RamColorsEverywhereAdded);
+            l.Add("CpuSectionNameInitialized=" + CpuSectionNameInitialized); l.Add("GpuSectionNameInitialized=" + GpuSectionNameInitialized); l.Add("NetworkSectionNameInitialized=" + NetworkSectionNameInitialized);
+            l.Add("CustomColors=" + String.Join(",", Array.ConvertAll(CustomColors ?? new int[0], delegate(int color) { return color.ToString(CultureInfo.InvariantCulture); })));
             for (int i = 0; i < FanProfiles.Count; i++) l.Add("FanProfile." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + FanProfiles[i].Serialize());
             l.Add("DashboardRows3=" + DashboardRows3); l.Add("DashboardRows4=" + DashboardRows4);
             for (int i = 0; i < Dashboard3.Count; i++) l.Add("Item3." + i.ToString("D3", CultureInfo.InvariantCulture) + "=" + Dashboard3[i].Serialize());
@@ -93,6 +141,16 @@ namespace VegaDesktopWidget
         }
         public List<DashboardItem> ActiveDashboard { get { return GridColumns == 3 ? Dashboard3 : Dashboard4; } }
         public int ActiveDashboardRows { get { return GridColumns == 3 ? DashboardRows3 : DashboardRows4; } }
+        private static int[] ParseCustomColors(string value)
+        {
+            List<int> colors = new List<int>();
+            foreach (string part in (value ?? "").Split(','))
+            {
+                int color; if (Int32.TryParse(part.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out color) && color >= 0 && color <= 0xFFFFFF) colors.Add(color);
+                if (colors.Count == 16) break;
+            }
+            return colors.ToArray();
+        }
         public static string NormalizeHeaderTitle(string value) { string title = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim(); if (title.Length == 0) return DefaultHeaderTitle; return title.Length > 48 ? title.Substring(0, 48) : title; }
         public static string NormalizeHWiNFOExecutablePath(string value)
         {

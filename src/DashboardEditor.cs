@@ -220,7 +220,7 @@ namespace VegaDesktopWidget
             table.Controls.Add(LabelFor("Find sensor"), 0, 0); search.Dock = DockStyle.Fill; search.Margin = new Padding(3, 4, 3, 6); table.Controls.Add(search, 1, 0);
             table.Controls.Add(LabelFor("Sensors"), 0, 1); sensor.Dock = DockStyle.Fill; sensor.IntegralHeight = false; sensor.HorizontalScrollbar = true; table.Controls.Add(sensor, 1, 1);
             resultCount.Dock = DockStyle.Fill; resultCount.ForeColor = Color.DimGray; resultCount.TextAlign = ContentAlignment.MiddleLeft; table.Controls.Add(resultCount, 1, 2);
-            table.Controls.Add(LabelFor("Box type"), 0, 3); type.Dock = DockStyle.Left; type.Width = 260; type.DropDownStyle = ComboBoxStyle.DropDownList; type.Items.AddRange(new object[] { "Big metric", "Horizontal spec (half-cell)", "Vertical spec", "Graph", "Section heading" }); type.SelectedIndex = 0; table.Controls.Add(type, 1, 3);
+            table.Controls.Add(LabelFor("Box type"), 0, 3); type.Dock = DockStyle.Left; type.Width = 260; type.DropDownStyle = ComboBoxStyle.DropDownList; type.Items.AddRange(new object[] { "Big metric", "Horizontal spec (half-cell)", "Vertical spec", "Graph", "Compact graph (half-height)", "Section heading" }); type.SelectedIndex = 0; table.Controls.Add(type, 1, 3);
             FlowLayoutPanel buttons = new FlowLayoutPanel(); buttons.FlowDirection = FlowDirection.RightToLeft; buttons.Dock = DockStyle.Fill; Button cancel = new Button(); cancel.Text = "Cancel"; cancel.DialogResult = DialogResult.Cancel; cancel.Size = new Size(90, 30); add.Text = "Add"; add.DialogResult = DialogResult.OK; add.Size = new Size(90, 30); buttons.Controls.Add(cancel); buttons.Controls.Add(add); table.Controls.Add(buttons, 0, 4); table.SetColumnSpan(buttons, 2); Controls.Add(table); AcceptButton = add; CancelButton = cancel;
             search.TextChanged += delegate { ApplyFilter(); }; sensor.SelectedIndexChanged += delegate { UpdateAddState(); }; sensor.DoubleClick += delegate { if (add.Enabled) { DialogResult = DialogResult.OK; Close(); } }; type.SelectedIndexChanged += delegate { bool needsSensor = SelectedType != DashboardBoxType.Section; search.Enabled = sensor.Enabled = needsSensor; UpdateAddState(); };
             ApplyFilter(); search.Select();
@@ -257,7 +257,7 @@ namespace VegaDesktopWidget
                 {
                     if (item.BoxType != DashboardBoxType.Section && String.IsNullOrWhiteSpace(item.SensorKey)) { error = "Every non-section component must have a sensor."; return false; }
                     if (!(item.Thresholds[0] < item.Thresholds[1] && item.Thresholds[1] < item.Thresholds[2] && item.Thresholds[2] < item.Thresholds[3])) { error = "Color thresholds must increase from Step 2 through Step 5."; return false; }
-                    if (item.BoxType == DashboardBoxType.Graph && item.GraphMaximum <= item.GraphMinimum) { error = "Every graph maximum must be higher than its minimum."; return false; }
+                    if ((item.BoxType == DashboardBoxType.Graph || item.BoxType == DashboardBoxType.CompactGraph) && item.GraphMaximum <= item.GraphMinimum) { error = "Every graph maximum must be higher than its minimum."; return false; }
                 }
             error = ""; return true;
         }
@@ -285,7 +285,7 @@ namespace VegaDesktopWidget
             AddRow(table, "Display name", displayName); displayName.MaxLength = 36;
             AddRow(table, "Find sensor", sensorSearch); sensorSearch.TextChanged += delegate { FilterSensors(); };
             sensorChoice.DropDownStyle = ComboBoxStyle.DropDownList; sensorChoice.DropDownWidth = 850; foreach (SensorChoice choice in choices) sensorChoice.Items.Add(choice); AddRow(table, "Sensor", sensorChoice);
-            typeChoice.DropDownStyle = ComboBoxStyle.DropDownList; typeChoice.Items.AddRange(new object[] { "Big metric", "Horizontal spec", "Vertical spec", "Graph", "Section heading" }); AddRow(table, "Box type", typeChoice);
+            typeChoice.DropDownStyle = ComboBoxStyle.DropDownList; typeChoice.Items.AddRange(new object[] { "Big metric", "Horizontal spec", "Vertical spec", "Graph", "Compact graph", "Section heading" }); AddRow(table, "Box type", typeChoice);
             Heading(table, "VALUE FORMAT"); valueDecimals.DropDownStyle = ComboBoxStyle.DropDownList; valueDecimals.Items.AddRange(new object[] { "Automatic", "0 decimals", "1 decimal", "2 decimals" }); AddRow(table, "Decimals", valueDecimals);
             showUnit.Text = "Show sensor unit"; showUnit.AutoSize = true; AddRow(table, "Unit", showUnit);
             valueFontPercent.Increment = 5; AddRow(table, "Value font (%)", valueFontPercent);
@@ -362,6 +362,7 @@ namespace VegaDesktopWidget
             foreach (NumericUpDown threshold in thresholds) if (threshold != null) threshold.Enabled = enabled;
             foreach (Button button in colorButtons) if (button != null) button.Enabled = enabled;
             if (!enabled) { displayName.Text = ""; formatPreview.Text = "—"; placementStatus.Text = "Select a component or click + Add."; loading = wasLoading; return; }
+            displayName.MaxLength = item.BoxType == DashboardBoxType.Section ? 128 : 36;
             displayName.Text = item.DisplayName; typeChoice.SelectedIndex = (int)item.BoxType; row.Value = Clamp(row, item.Row + 1); column.Value = Clamp(column, item.Column + 1); columnSpan.Value = Clamp(columnSpan, item.ColumnSpan); extrema.Checked = item.ShowExtrema;
             graphMin.Value = Clamp(graphMin, (decimal)item.GraphMinimum); graphMax.Value = Clamp(graphMax, (decimal)item.GraphMaximum);
             valueDecimals.SelectedIndex = Math.Max(0, Math.Min(3, item.ValueDecimals + 1)); showUnit.Checked = item.ShowUnit; valueFontPercent.Value = Clamp(valueFontPercent, item.ValueFontPercent);
@@ -422,7 +423,7 @@ namespace VegaDesktopWidget
         private void PositionChanged()
         {
             if (loading || canvas.SelectedItem == null) return; DashboardItem item = canvas.SelectedItem; int c = (int)column.Value - 1, r = (int)row.Value - 1;
-            int span = item.BoxType == DashboardBoxType.Graph || item.BoxType == DashboardBoxType.Section ? (int)columnSpan.Value : 1;
+            int span = item.BoxType == DashboardBoxType.CompactGraph ? editorColumns : item.BoxType == DashboardBoxType.Graph || item.BoxType == DashboardBoxType.Section ? (int)columnSpan.Value : 1;
             if (!canvas.TryPlace(item, c, r, span, item.RowSpan)) { placementStatus.Text = "That position overlaps another component or exceeds the grid."; LoadSelected(); } else placementStatus.Text = "";
         }
 
@@ -437,12 +438,52 @@ namespace VegaDesktopWidget
 
         private void PickColor(int index)
         {
-            DashboardItem item = canvas.SelectedItem; if (item == null) return; using (ColorDialog dialog = new ColorDialog()) { dialog.Color = Color.FromArgb(item.Colors[index]); dialog.FullOpen = true; if (dialog.ShowDialog(this) != DialogResult.OK) return; item.Colors[index] = dialog.Color.ToArgb(); SetColorButton(index, dialog.Color); canvas.Invalidate(); }
+            DashboardItem item = canvas.SelectedItem; if (item == null) return;
+            using (ColorDialog dialog = new ColorDialog())
+            {
+                dialog.Color = Color.FromArgb(item.Colors[index]); dialog.FullOpen = true;
+                int[] palette = PrepareCustomPalette(config.CustomColors); dialog.CustomColors = palette;
+                DialogResult result = dialog.ShowDialog(this);
+                config.CustomColors = CaptureCustomPalette(dialog.CustomColors, palette);
+                if (result != DialogResult.OK) return;
+                item.Colors[index] = dialog.Color.ToArgb(); SetColorButton(index, dialog.Color); canvas.Invalidate();
+            }
+        }
+
+        private static int[] PrepareCustomPalette(int[] saved)
+        {
+            const int empty = 0xFFFFFF; List<int> colors = CompactCustomColors(saved);
+            int[] palette = new int[16]; for (int i = 0; i < palette.Length; i++) palette[i] = empty;
+            int offset = colors.Count < palette.Length ? 1 : 0;
+            for (int i = 0; i < colors.Count && i + offset < palette.Length; i++) palette[i + offset] = colors[i];
+            return palette;
+        }
+
+        private static int[] CaptureCustomPalette(int[] current, int[] opened)
+        {
+            const int empty = 0xFFFFFF; List<int> colors = new List<int>();
+            if (current == null) return colors.ToArray();
+            bool reservedFirst = opened != null && opened.Length > 0 && opened[0] == empty;
+            int start = reservedFirst ? 1 : 0;
+            for (int i = start; i < current.Length && colors.Count < 16; i++) if (current[i] != empty && !colors.Contains(current[i])) colors.Add(current[i]);
+            if (reservedFirst && current.Length > 0 && current[0] != empty)
+            {
+                colors.Remove(current[0]); if (colors.Count == 16) colors.RemoveAt(colors.Count - 1); colors.Add(current[0]);
+            }
+            return colors.ToArray();
+        }
+
+        private static List<int> CompactCustomColors(int[] source)
+        {
+            const int empty = 0xFFFFFF; List<int> colors = new List<int>();
+            if (source == null) return colors;
+            foreach (int color in source) if (color >= 0 && color <= 0xFFFFFF && color != empty && !colors.Contains(color) && colors.Count < 16) colors.Add(color);
+            return colors;
         }
 
         private void UpdateVisibility(DashboardItem item)
         {
-            bool section = item.BoxType == DashboardBoxType.Section, graph = item.BoxType == DashboardBoxType.Graph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = graph || section; extrema.Enabled = item.BoxType == DashboardBoxType.Big; sensorSearch.Enabled = sensorChoice.Enabled = valueDecimals.Enabled = showUnit.Enabled = valueFontPercent.Enabled = !section;
+            bool section = item.BoxType == DashboardBoxType.Section, graph = item.BoxType == DashboardBoxType.Graph || item.BoxType == DashboardBoxType.CompactGraph; graphMin.Enabled = graph; graphMax.Enabled = graph; columnSpan.Enabled = item.BoxType == DashboardBoxType.Graph || section; extrema.Enabled = item.BoxType == DashboardBoxType.Big || item.BoxType == DashboardBoxType.CompactGraph; sensorSearch.Enabled = sensorChoice.Enabled = valueDecimals.Enabled = showUnit.Enabled = valueFontPercent.Enabled = !section;
         }
 
         private void UpdateFormatPreview(DashboardItem item)

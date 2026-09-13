@@ -2,6 +2,8 @@
 artifacts/
 bin/
 obj/
+/backups/
+/executable/
 *.exe
 *.zip
 *.pdb

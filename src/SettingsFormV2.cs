@@ -169,7 +169,9 @@ namespace VegaDesktopWidget
         {
             WidgetConfig copy = new WidgetConfig(); copy.Left = source.Left; copy.Top = source.Top; copy.Width = source.Width; copy.UiScaleMode = source.UiScaleMode; copy.GridColumns = source.GridColumns; copy.HeaderTitle = source.HeaderTitle;
             copy.RefreshMilliseconds = source.RefreshMilliseconds; copy.OpacityPercent = source.OpacityPercent; copy.ProcessStripMode = source.ProcessStripMode; copy.AlwaysOnTop = source.AlwaysOnTop; copy.ShowGraphs = source.ShowGraphs; copy.LaunchHWiNFO = source.LaunchHWiNFO; copy.AutoRestartHWiNFO = source.AutoRestartHWiNFO; copy.FanControlEnabled = source.FanControlEnabled;
-            copy.HWiNFOExecutablePath = source.HWiNFOExecutablePath;
+            copy.HWiNFOExecutablePath = source.HWiNFOExecutablePath; copy.SystemNetworkDefaultsAdded = source.SystemNetworkDefaultsAdded; copy.CompactNetworkGraphsAdded = source.CompactNetworkGraphsAdded; copy.CompactNetworkExtremaAdded = source.CompactNetworkExtremaAdded; copy.RamColorsEverywhereAdded = source.RamColorsEverywhereAdded;
+            copy.CpuSectionNameInitialized = source.CpuSectionNameInitialized; copy.GpuSectionNameInitialized = source.GpuSectionNameInitialized; copy.NetworkSectionNameInitialized = source.NetworkSectionNameInitialized;
+            copy.CustomColors = source.CustomColors == null ? new int[0] : (int[])source.CustomColors.Clone();
             copy.CpuGraphMin = source.CpuGraphMin; copy.CpuGraphMax = source.CpuGraphMax; copy.GpuGraphMin = source.GpuGraphMin; copy.GpuGraphMax = source.GpuGraphMax;
             copy.DashboardRows3 = source.DashboardRows3; copy.DashboardRows4 = source.DashboardRows4; copy.Dashboard3.Clear(); copy.Dashboard4.Clear();
             foreach (DashboardItem item in source.Dashboard3) copy.Dashboard3.Add(item.Clone()); foreach (DashboardItem item in source.Dashboard4) copy.Dashboard4.Add(item.Clone());

@@ -102,6 +102,23 @@ namespace VegaDesktopWidget
             DrawSpark(g, new Rectangle(r.X + 112, r.Y + 20, r.Width - 120, r.Height - 27), accent, values, minimum, maximum);
         }
 
+        public void DrawCompactGraphBox(Graphics g, Rectangle r, string label, string current, string highest, string lowest, Color accent, IList<double> values, double minimum, double maximum, bool showExtrema, float valueFontScale)
+        {
+            FillBox(g, r);
+            int labelWidth = Math.Min(75, Math.Max(55, r.Width / 5));
+            int valueWidth = Math.Min(100, Math.Max(76, r.Width / 4));
+            DrawText(g, label, 6.7f, FontStyle.Bold, LabelColor, new RectangleF(r.X + 7, r.Y + 2, labelWidth - 7, r.Height - 4), StringAlignment.Near);
+            DrawValueText(g, current, (current.Length > 10 ? 9f : 11f) * valueFontScale, FontStyle.Bold, accent, new RectangleF(r.X + labelWidth, r.Y + 2, valueWidth, r.Height - 4), StringAlignment.Near);
+            int extremaWidth = showExtrema ? Math.Min(91, Math.Max(78, r.Width / 4)) : 0;
+            if (showExtrema)
+            {
+                DrawValueText(g, "↑ " + highest, 7.1f, FontStyle.Bold, SecondaryColor, new RectangleF(r.X + labelWidth + valueWidth, r.Y + 1, extremaWidth, 14), StringAlignment.Near);
+                DrawValueText(g, "↓ " + lowest, 7.1f, FontStyle.Bold, SecondaryColor, new RectangleF(r.X + labelWidth + valueWidth, r.Y + 15, extremaWidth, 14), StringAlignment.Near);
+            }
+            int graphX = r.X + labelWidth + valueWidth + extremaWidth + 5;
+            DrawSpark(g, new Rectangle(graphX, r.Y + 5, Math.Max(0, r.Right - graphX - 7), Math.Max(0, r.Height - 10)), accent, values, minimum, maximum);
+        }
+
         private static void FillBox(Graphics g, Rectangle r)
         {
             using (SolidBrush b = new SolidBrush(BoxBackground)) g.FillRectangle(b, r);

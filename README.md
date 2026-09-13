@@ -21,12 +21,16 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Editable, version-aware header title with compact Windows system uptime.
 - The dashboard is click-through except for a compact gear button that opens the control menu.
 - Search and add every sensor exposed through HWiNFO shared memory by label, device, unit, or sensor type.
-- Five reusable component types: Big metric, Horizontal spec, Vertical spec, Graph, and Section.
+- Six reusable component types: Big metric, Horizontal spec, Vertical spec, Graph, Compact graph, and Section.
+- Full-width, half-height compact graphs keep the title, current value, and sparkline readable in one dashboard row.
+- A default system section adds full-width upload and download graphs with optional recorded minimum and maximum values.
+- CPU, GPU, and network section titles initialize once from the matching HWiNFO device names and remain editable afterward.
 - Drag-and-drop placement with grid snapping and overlap prevention.
 - Precise column, half-row, width, and dashboard-height controls.
-- Custom display name for every component.
+- Custom display name for every component, with longer section headings that shrink to fit the available width.
 - Per-component value formatting with automatic, 0-, 1-, or 2-decimal precision, unit visibility, a 60–160% value-font control, and a live preview.
-- Five colors and four change thresholds, configured independently per component.
+- Five colors and four change thresholds, configured independently per component, with the RAM-style alert palette as the default.
+- Custom colors are shared across every component and dashboard, persist between sessions, and use the next free palette slot when added.
 - Fixed minimum and maximum for every graph.
 - Optional recorded minimum and maximum on Big metric components.
 - Duplicate, delete, and reset-layout actions.
@@ -40,11 +44,11 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Per-channel minimum output and missing-sensor fail-safe output.
 - Fan writes run in a separate administrator helper; closing the widget restores each controlled channel to firmware/default mode.
 - Apply validates and saves changes without closing Configure; OK applies and closes.
-- Existing v1.x dashboard settings are migrated automatically.
+- Existing dashboard settings are migrated automatically for the new system section, compact network graphs, colors, and hardware-derived section titles.
 
 ## Requirements
 
-- Windows 10 or Windows 11, 64-bit.
+- Windows Vista, 7, 8, 8.1, 10, or 11, 64-bit.
 - HWiNFO32 or HWiNFO64 with Shared Memory Support enabled.
 - .NET Framework 4.x.
 - Administrator approval when scanning or enabling Super I/O fan control.
@@ -76,7 +80,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.5.6-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.0-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
@@ -84,9 +88,9 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.5.6-win-x64.zip` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.6.0-win-x64.zip` from the [latest release](../../releases/latest).
 2. Extract all four files into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.5.6.exe`.
+5. Run `SystemMonitorWidget-v2.6.0.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

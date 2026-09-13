@@ -12,6 +12,7 @@ namespace VegaDesktopWidget
         public uint ReadingId;
         public int Type;
         public string SensorName;
+        public string OriginalSensorName;
         public string OriginalLabel;
         public string Label;
         public string Unit;
@@ -72,7 +73,7 @@ namespace VegaDesktopWidget
                     SensorIdentity sensor = new SensorIdentity();
                     sensor.Id = ReadUInt32(view, p); sensor.Instance = ReadUInt32(view, p + 4);
                     string original = ReadAnsi(view, p + 8, 128), user = ReadAnsi(view, p + 136, 128);
-                    sensor.Name = String.IsNullOrWhiteSpace(user) ? original : user; sensors.Add(sensor);
+                    sensor.OriginalName = original; sensor.Name = String.IsNullOrWhiteSpace(user) ? original : user; sensors.Add(sensor);
                 }
                 for (i = 0; i < readingCount; i++)
                 {
@@ -80,7 +81,7 @@ namespace VegaDesktopWidget
                     uint sensorIndex = ReadUInt32(view, p + 4); if (sensorIndex >= sensors.Count) continue;
                     SensorIdentity sensor = sensors[(int)sensorIndex]; SensorReading reading = new SensorReading();
                     reading.Type = (int)ReadUInt32(view, p); reading.SensorId = sensor.Id; reading.SensorInstance = sensor.Instance;
-                    reading.ReadingId = ReadUInt32(view, p + 8); reading.SensorName = sensor.Name;
+                    reading.ReadingId = ReadUInt32(view, p + 8); reading.SensorName = sensor.Name; reading.OriginalSensorName = sensor.OriginalName;
                     reading.OriginalLabel = ReadAnsi(view, p + 12, 128); string userLabel = ReadAnsi(view, p + 140, 128);
                     reading.Label = String.IsNullOrWhiteSpace(userLabel) ? reading.OriginalLabel : userLabel;
                     reading.Unit = ReadAnsi(view, p + 268, 16); reading.Value = ReadDouble(view, p + 284);
@@ -99,6 +100,6 @@ namespace VegaDesktopWidget
         private static uint ReadUInt32(IntPtr b, long o) { return unchecked((uint)Marshal.ReadInt32(new IntPtr(b.ToInt64() + o))); }
         private static double ReadDouble(IntPtr b, long o) { byte[] x = new byte[8]; Marshal.Copy(new IntPtr(b.ToInt64() + o), x, 0, 8); return BitConverter.ToDouble(x, 0); }
         private static string ReadAnsi(IntPtr b, long o, int n) { byte[] x = new byte[n]; Marshal.Copy(new IntPtr(b.ToInt64() + o), x, 0, n); int e = Array.IndexOf<byte>(x, 0); if (e < 0) e = n; return Encoding.Default.GetString(x, 0, e).Trim(); }
-        private sealed class SensorIdentity { public uint Id; public uint Instance; public string Name; }
+        private sealed class SensorIdentity { public uint Id; public uint Instance; public string Name; public string OriginalName; }
     }
 }

@@ -159,6 +159,7 @@ namespace VegaDesktopWidget
         private void RefreshSensors()
         {
             readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal);
+            if (readings.Count > 0 && HardwareSectionNames.Apply(config, readings)) config.Save();
             if (!settingsOpen) fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
             if (config.ProcessStripMode == 0) topProcesses.Clear(); else topProcesses = processSampler.SampleTop(3, config.ProcessStripMode == 1);
             foreach (DashboardItem item in config.ActiveDashboard)
@@ -166,7 +167,7 @@ namespace VegaDesktopWidget
                 if (item.BoxType == DashboardBoxType.Section) continue;
                 double? value = ItemValue(item); if (!value.HasValue) continue;
                 GetExtrema(item.Id).Add(value.Value);
-                if (item.BoxType == DashboardBoxType.Graph) AddHistory(item.Id, value.Value);
+                if (item.BoxType == DashboardBoxType.Graph || item.BoxType == DashboardBoxType.CompactGraph) AddHistory(item.Id, value.Value);
             }
             if (gearWindow != null) gearWindow.SetLive(readings.Count > 0); Invalidate();
         }
@@ -270,6 +271,13 @@ namespace VegaDesktopWidget
                     string range = FormatRange(item.GraphMinimum, item.GraphMaximum, unit);
                     components.DrawGraphBox(g, r, label, value, range, color, values, item.GraphMinimum, item.GraphMaximum, valueFontScale);
                 }
+                else if (item.BoxType == DashboardBoxType.CompactGraph)
+                {
+                    List<double> values = null; if (config.ShowGraphs) history.TryGetValue(item.Id, out values);
+                    MetricExtrema extrema = GetExtrema(item.Id);
+                    string highest = FormatExtrema(item, reading, extrema, true), lowest = FormatExtrema(item, reading, extrema, false);
+                    components.DrawCompactGraphBox(g, r, label, value, highest, lowest, color, values, item.GraphMinimum, item.GraphMaximum, item.ShowExtrema, valueFontScale);
+                }
             }
         }
 
@@ -292,7 +300,7 @@ namespace VegaDesktopWidget
             Color accent = Color.FromArgb(item.Colors[0]);
             using (SolidBrush b = new SolidBrush(Color.FromArgb(23, 29, 38))) g.FillRectangle(b, r);
             using (SolidBrush b = new SolidBrush(accent)) g.FillRectangle(b, r.X, r.Y + 4, 3, r.Height - 8);
-            DrawText(g, item.DisplayName, 9.5f, FontStyle.Bold, Color.FromArgb(225, 232, 240), new RectangleF(r.X + 12, r.Y + 2, r.Width - 18, r.Height - 4), StringAlignment.Near);
+            DrawTextFit(g, item.DisplayName, 9.5f, 7.5f, FontStyle.Bold, Color.FromArgb(225, 232, 240), new RectangleF(r.X + 12, r.Y + 2, r.Width - 18, r.Height - 4), StringAlignment.Near);
         }
 
         private string FormatExtrema(DashboardItem item, SensorReading reading, MetricExtrema range, bool maximum)
@@ -301,6 +309,7 @@ namespace VegaDesktopWidget
             if (item.SensorKey == "__RAM_USED__") return SensorValueFormatter.FormatValue(value, "GB", item.ValueDecimals, item.ShowUnit);
             return SensorValueFormatter.FormatValue(value, reading == null ? "" : reading.Unit, item.ValueDecimals, item.ShowUnit);
         }
+
 
         private static string FormatRange(double minimum, double maximum, string unit)
         {

@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace VegaDesktopWidget
 {
-    internal enum DashboardBoxType { Big, Horizontal, Vertical, Graph, Section }
+    internal enum DashboardBoxType { Big, Horizontal, Vertical, Graph, CompactGraph, Section }
 
     internal sealed class DashboardItem
     {
@@ -23,7 +23,7 @@ namespace VegaDesktopWidget
         public double GraphMinimum;
         public double GraphMaximum = 100;
         public double[] Thresholds = new double[] { 20, 40, 60, 80 };
-        public int[] Colors = ActivityColors();
+        public int[] Colors = AlertColors();
         public int ValueDecimals = -1;
         public bool ShowUnit = true;
         public int ValueFontPercent = 100;
@@ -40,6 +40,7 @@ namespace VegaDesktopWidget
         {
             if (BoxType == DashboardBoxType.Horizontal) { ColumnSpan = 1; RowSpan = 1; ShowExtrema = false; }
             else if (BoxType == DashboardBoxType.Graph) { ColumnSpan = columns; RowSpan = 2; ShowExtrema = false; }
+            else if (BoxType == DashboardBoxType.CompactGraph) { Column = 0; ColumnSpan = columns; RowSpan = 1; }
             else if (BoxType == DashboardBoxType.Section) { ColumnSpan = columns; RowSpan = 1; ShowExtrema = false; SensorKey = ""; }
             else { ColumnSpan = 1; RowSpan = 2; }
             Column = Math.Max(0, Math.Min(columns - ColumnSpan, Column));
@@ -78,7 +79,7 @@ namespace VegaDesktopWidget
             if (Double.TryParse(p[11], NumberStyles.Float, CultureInfo.InvariantCulture, out d)) item.GraphMinimum = d;
             if (Double.TryParse(p[12], NumberStyles.Float, CultureInfo.InvariantCulture, out d)) item.GraphMaximum = d;
             item.Thresholds = ParseDoubles(p[13], new double[] { 20, 40, 60, 80 });
-            item.Colors = ParseInts(p[14], ActivityColors());
+            item.Colors = ParseInts(p[14], AlertColors());
             if (p.Length > 15 && Int32.TryParse(p[15], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) item.ValueDecimals = Math.Max(-1, Math.Min(2, n));
             if (p.Length > 16 && Boolean.TryParse(p[16], out flag)) item.ShowUnit = flag;
             if (p.Length > 17 && Int32.TryParse(p[17], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) item.ValueFontPercent = Math.Max(60, Math.Min(160, n));
@@ -155,12 +156,12 @@ namespace VegaDesktopWidget
     }
     internal static class DashboardDefaults
     {
-        public const int Rows = 14;
+        public const int Rows = 17;
 
         public static List<DashboardItem> Create(int columns)
         {
             List<DashboardItem> items = new List<DashboardItem>();
-            items.Add(Section(columns, 0, "CPU · Intel Xeon X5670", Color.FromArgb(80, 181, 255)));
+            items.Add(Section(columns, 0, "CPU · Intel Xeon X5670"));
             items.Add(Role("CpuTemp", "CORE MAX", DashboardBoxType.Big, 0, 1, columns == 3));
             items.Add(Role("CpuLoad", "UTILIZATION", DashboardBoxType.Big, 1, 1, columns == 3));
             items.Add(Ram(2, 1, columns == 3));
@@ -170,7 +171,7 @@ namespace VegaDesktopWidget
                 items.Add(Role("CpuCore" + (column * 2 + 1), columns == 4 ? "C" + (column * 2 + 2) : "CORE " + (column * 2 + 2), DashboardBoxType.Horizontal, column, 4, false));
             }
             DashboardItem cpuGraph = Role("CpuPower", "CPU VRM OUTPUT", DashboardBoxType.Graph, 0, 5, false); cpuGraph.ColumnSpan = columns; cpuGraph.GraphMinimum = 0; cpuGraph.GraphMaximum = 150; items.Add(cpuGraph);
-            items.Add(Section(columns, 7, "GPU · Radeon RX Vega 64 · Gigabyte Gaming OC", Color.FromArgb(255, 98, 121)));
+            items.Add(Section(columns, 7, "GPU · Radeon RX Vega 64 · Gigabyte Gaming OC"));
             items.Add(Role("GpuTemp", "GPU TEMP", DashboardBoxType.Big, 0, 8, columns == 3));
             items.Add(Role("GpuHotspot", "HOT", DashboardBoxType.Horizontal, 1, 8, false));
             items.Add(Role("GpuHbmTemp", "HBM", DashboardBoxType.Horizontal, 1, 9, false));
@@ -189,7 +190,42 @@ namespace VegaDesktopWidget
                 items.Add(Role("GpuMemory", "VRAM USED", DashboardBoxType.Big, 2, 10, true));
             }
             DashboardItem gpuGraph = Role("GpuPower", "GPU POWER EST.", DashboardBoxType.Graph, 0, 12, false); gpuGraph.ColumnSpan = columns; gpuGraph.GraphMinimum = 0; gpuGraph.GraphMaximum = 350; items.Add(gpuGraph);
+            items.Add(Section(columns, 14, "SYSTEM"));
+            items.Add(Role("NetworkUpload", "UPLOAD", DashboardBoxType.CompactGraph, 0, 15, true));
+            items.Add(Role("NetworkDownload", "DOWNLOAD", DashboardBoxType.CompactGraph, 0, 16, true));
             return items;
+        }
+
+        public static int AddSystemNetworkDefaults(List<DashboardItem> items, int columns, int rows)
+        {
+            int bottom = 0, sectionRow = -1; bool hasUpload = false, hasDownload = false;
+            foreach (DashboardItem item in items)
+            {
+                bottom = Math.Max(bottom, item.Row + Math.Max(1, item.RowSpan));
+                if (item.BoxType == DashboardBoxType.Section && item.DisplayName.Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) sectionRow = item.Row;
+                if (item.SensorKey.Equals("role:NetworkUpload", StringComparison.OrdinalIgnoreCase)) hasUpload = true;
+                if (item.SensorKey.Equals("role:NetworkDownload", StringComparison.OrdinalIgnoreCase)) hasDownload = true;
+            }
+            if (sectionRow >= 0 && hasUpload && hasDownload) return Math.Max(rows, bottom);
+            if (sectionRow < 0)
+            {
+                sectionRow = bottom; items.Add(Section(columns, sectionRow, "SYSTEM")); bottom = sectionRow + 1;
+            }
+            int metricRow = Math.Max(sectionRow + 1, bottom);
+            if (!hasUpload) items.Add(Role("NetworkUpload", "UPLOAD", DashboardBoxType.CompactGraph, 0, metricRow, true));
+            if (!hasDownload) items.Add(Role("NetworkDownload", "DOWNLOAD", DashboardBoxType.CompactGraph, 0, metricRow + 1, true));
+            return Math.Max(rows, metricRow + 2);
+        }
+
+        public static int ConvertNetworkMetricsToCompactGraphs(List<DashboardItem> items, int columns, int rows)
+        {
+            DashboardItem upload = items.Find(delegate(DashboardItem item) { return item.SensorKey.Equals("role:NetworkUpload", StringComparison.OrdinalIgnoreCase); });
+            DashboardItem download = items.Find(delegate(DashboardItem item) { return item.SensorKey.Equals("role:NetworkDownload", StringComparison.OrdinalIgnoreCase); });
+            if (upload == null || download == null) return rows;
+            int firstRow = Math.Min(upload.Row, download.Row);
+            upload.BoxType = DashboardBoxType.CompactGraph; upload.Column = 0; upload.Row = firstRow; upload.ApplyTypeDefaults(columns); upload.ShowExtrema = true;
+            download.BoxType = DashboardBoxType.CompactGraph; download.Column = 0; download.Row = firstRow + 1; download.ApplyTypeDefaults(columns); download.ShowExtrema = true;
+            return Math.Max(rows, firstRow + 2);
         }
 
         public static DashboardItem ForSensor(SensorReading sensor, DashboardBoxType type, int columns)
@@ -201,10 +237,10 @@ namespace VegaDesktopWidget
             return item;
         }
 
-        private static DashboardItem Section(int columns, int row, string name, Color color)
+        private static DashboardItem Section(int columns, int row, string name)
         {
             DashboardItem item = new DashboardItem(); item.BoxType = DashboardBoxType.Section; item.DisplayName = name; item.Row = row; item.ColumnSpan = columns; item.RowSpan = 1;
-            item.Colors = new int[] { color.ToArgb(), color.ToArgb(), color.ToArgb(), color.ToArgb(), color.ToArgb() }; return item;
+            item.Colors = DashboardItem.AlertColors(); return item;
         }
 
         private static DashboardItem Ram(int column, int row, bool extrema)
@@ -223,7 +259,7 @@ namespace VegaDesktopWidget
         public static void ApplyPalette(DashboardItem item, string unit, int sensorType, string role)
         {
             string u = unit == null ? "" : unit.Trim();
-            item.Colors = DashboardItem.ActivityColors(); item.Thresholds = new double[] { 20, 40, 60, 80 };
+            item.Colors = DashboardItem.AlertColors(); item.Thresholds = new double[] { 20, 40, 60, 80 };
             if (role == "CpuPower") { item.Colors = DashboardItem.AlertColors(); item.Thresholds = new double[] { 30, 60, 90, 120 }; }
             else if (role == "GpuPower") { item.Colors = DashboardItem.AlertColors(); item.Thresholds = new double[] { 70, 140, 210, 280 }; }
             else if (role == "CpuLoad" || role == "GpuLoad") { item.Colors = DashboardItem.AlertColors(); item.Thresholds = new double[] { 20, 45, 70, 90 }; }
