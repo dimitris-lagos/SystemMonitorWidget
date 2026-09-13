@@ -11,6 +11,10 @@ namespace VegaDesktopWidget
         public string Key, Label, SensorName, Unit, Display, SearchText;
         public SensorReading Reading;
         public override string ToString() { return Display; }
+        public bool MatchesBinding(DashboardItem item)
+        {
+            return Reading != null ? Reading.MatchesIdentity(item.SensorLabel, item.SensorName) : String.Equals(Label, item.SensorLabel, StringComparison.OrdinalIgnoreCase) && String.Equals(SensorName, item.SensorName, StringComparison.OrdinalIgnoreCase);
+        }
 
         public bool Matches(string query)
         {
@@ -300,7 +304,7 @@ namespace VegaDesktopWidget
             }
             placementStatus.AutoSize = true; placementStatus.ForeColor = Color.FromArgb(190, 68, 68); placementStatus.MaximumSize = new Size(300, 0); table.Controls.Add(placementStatus); table.SetColumnSpan(placementStatus, 2);
             panel.Controls.Add(table);
-            displayName.TextChanged += delegate { PropertyChanged(); }; sensorChoice.SelectedIndexChanged += delegate { SensorChanged(); }; typeChoice.SelectedIndexChanged += delegate { TypeChanged(); };
+            displayName.TextChanged += delegate { PropertyChanged(); }; sensorChoice.SelectionChangeCommitted += delegate { SensorChanged(); }; typeChoice.SelectedIndexChanged += delegate { TypeChanged(); };
             row.ValueChanged += delegate { PositionChanged(); }; column.ValueChanged += delegate { PositionChanged(); }; columnSpan.ValueChanged += delegate { PositionChanged(); };
             extrema.CheckedChanged += delegate { PropertyChanged(); }; graphMin.ValueChanged += delegate { PropertyChanged(); }; graphMax.ValueChanged += delegate { PropertyChanged(); };
             valueDecimals.SelectedIndexChanged += delegate { PropertyChanged(); }; showUnit.CheckedChanged += delegate { PropertyChanged(); }; valueFontPercent.ValueChanged += delegate { PropertyChanged(); };
@@ -370,10 +374,16 @@ namespace VegaDesktopWidget
         {
             sensorChoice.SelectedIndex = -1;
             if (item.BoxType == DashboardBoxType.Section) return;
-            string key = item.SensorKey; if (key.StartsWith("role:", StringComparison.OrdinalIgnoreCase)) { SensorReading resolved = RoleDefinitions.Resolve(readings, config, key.Substring(5)); if (resolved != null) key = resolved.Key; }
-            for (int i = 0; i < sensorChoice.Items.Count; i++) { SensorChoice choice = sensorChoice.Items[i] as SensorChoice; if (choice != null && choice.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) { sensorChoice.SelectedIndex = i; return; } }
-            SensorChoice current = choices.Find(delegate(SensorChoice choice) { return choice.Key.Equals(key, StringComparison.OrdinalIgnoreCase); });
-            if (current != null) { sensorChoice.Items.Insert(0, current); sensorChoice.SelectedIndex = 0; return; }
+            string key = item.SensorKey; bool role = key.StartsWith("role:", StringComparison.OrdinalIgnoreCase);
+            if (role) { SensorReading resolved = RoleDefinitions.Resolve(readings, config, key.Substring(5)); if (resolved != null) key = resolved.Key; }
+            SensorChoice chosen = choices.Find(delegate(SensorChoice choice) { return choice.Key.Equals(key, StringComparison.OrdinalIgnoreCase) && (role || String.IsNullOrWhiteSpace(item.SensorLabel) || choice.MatchesBinding(item)); });
+            if (chosen == null && !role && !String.IsNullOrWhiteSpace(item.SensorLabel)) chosen = choices.Find(delegate(SensorChoice choice) { return choice.MatchesBinding(item); });
+            if (chosen != null)
+            {
+                if (!role) { item.SensorKey = chosen.Key; item.SensorLabel = chosen.Label; item.SensorName = chosen.SensorName; }
+                if (!sensorChoice.Items.Contains(chosen)) sensorChoice.Items.Insert(0, chosen);
+                sensorChoice.SelectedItem = chosen; return;
+            }
             SensorChoice missing = new SensorChoice { Key = item.SensorKey, Label = item.SensorLabel, SensorName = item.SensorName, Display = item.DisplayName + "  —  currently unavailable" }; sensorChoice.Items.Insert(0, missing); sensorChoice.SelectedIndex = 0;
         }
 

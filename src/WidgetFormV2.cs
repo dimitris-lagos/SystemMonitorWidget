@@ -36,9 +36,15 @@ namespace VegaDesktopWidget
             Color accent = live ? Color.FromArgb(59, 214, 113) : Color.FromArgb(255, 184, 77);
             using (SolidBrush background = new SolidBrush(Color.FromArgb(23, 30, 39))) e.Graphics.FillEllipse(background, r);
             using (Pen border = new Pen(Color.FromArgb(155, accent), 1f)) e.Graphics.DrawEllipse(border, r.X + 0.5f, r.Y + 0.5f, r.Width - 1f, r.Height - 1f);
-            using (Font font = new Font("Segoe UI Symbol", Math.Max(8f, 11f * Width / 20f), FontStyle.Regular, GraphicsUnit.Point))
-            using (SolidBrush brush = new SolidBrush(accent))
-            using (StringFormat format = new StringFormat()) { format.Alignment = StringAlignment.Center; format.LineAlignment = StringAlignment.Center; e.Graphics.DrawString("\u2699", font, brush, ClientRectangle, format); }
+            float cx = (Width - 1) / 2f, cy = (Height - 1) / 2f, scale = Math.Min(Width, Height), outer = scale * 0.32f, ring = scale * 0.21f;
+            int toothCount = scale < 18f ? 6 : 8; float stroke = Math.Max(1.2f, scale * 0.09f);
+            using (Pen teeth = new Pen(accent, stroke))
+            {
+                teeth.StartCap = LineCap.Square; teeth.EndCap = LineCap.Square;
+                for (int i = 0; i < toothCount; i++) { double angle = Math.PI * 2.0 * i / toothCount; e.Graphics.DrawLine(teeth, cx + (float)Math.Cos(angle) * ring, cy + (float)Math.Sin(angle) * ring, cx + (float)Math.Cos(angle) * outer, cy + (float)Math.Sin(angle) * outer); }
+            }
+            using (Pen body = new Pen(accent, stroke)) e.Graphics.DrawEllipse(body, cx - ring, cy - ring, ring * 2f, ring * 2f);
+            using (SolidBrush hole = new SolidBrush(Color.FromArgb(23, 30, 39))) e.Graphics.FillEllipse(hole, cx - scale * 0.095f, cy - scale * 0.095f, scale * 0.19f, scale * 0.19f);
         }
     }
 
@@ -173,11 +179,8 @@ namespace VegaDesktopWidget
             if (item == null || item.SensorKey == "__RAM_USED__" || item.SensorKey.Length == 0) return null;
             if (item.SensorKey.StartsWith("role:", StringComparison.OrdinalIgnoreCase)) return RoleDefinitions.Resolve(readings, config, item.SensorKey.Substring(5));
             SensorReading exact = readings.Find(delegate(SensorReading r) { return r.Key.Equals(item.SensorKey, StringComparison.OrdinalIgnoreCase); });
-            if (exact != null) return exact;
-            return readings.Find(delegate(SensorReading r) {
-                bool label = r.OriginalLabel.Equals(item.SensorLabel, StringComparison.OrdinalIgnoreCase) || r.Label.Equals(item.SensorLabel, StringComparison.OrdinalIgnoreCase);
-                return label && (item.SensorName.Length == 0 || r.SensorName.Equals(item.SensorName, StringComparison.OrdinalIgnoreCase));
-            });
+            if (exact != null && (String.IsNullOrWhiteSpace(item.SensorLabel) || exact.MatchesIdentity(item.SensorLabel, item.SensorName))) return exact;
+            return readings.Find(delegate(SensorReading r) { return r.MatchesIdentity(item.SensorLabel, item.SensorName); });
         }
 
         private double? ItemValue(DashboardItem item)
@@ -372,10 +375,16 @@ namespace VegaDesktopWidget
         }
         private static bool IsHWiNFORestartDue(DateTime startedUtc, DateTime nowUtc) { return nowUtc - startedUtc >= HWiNFORestartInterval; }
 
+        private static Process[] GetHWiNFOProcesses()
+        {
+            List<Process> result = new List<Process>();
+            foreach (string name in new string[] { "HWiNFO64", "HWiNFO32" }) { try { result.AddRange(Process.GetProcessesByName(name)); } catch { } }
+            return result.ToArray();
+        }
         private void CheckHWiNFOAutoRestart()
         {
             if (!config.AutoRestartHWiNFO || hwinfoRestarting || DateTime.UtcNow < hwinfoRestartRetryUtc) return;
-            Process[] processes; try { processes = Process.GetProcessesByName("HWiNFO64"); } catch { return; }
+            Process[] processes = GetHWiNFOProcesses();
             try
             {
                 foreach (Process process in processes)
@@ -393,17 +402,17 @@ namespace VegaDesktopWidget
             if (!WidgetConfig.IsHWiNFOExecutablePath(executable))
             {
                 hwinfoRestartRetryUtc = DateTime.UtcNow.AddMinutes(15);
-                status = "HWiNFO64 executable was not found";
+                status = "HWiNFO executable was not found";
                 Invalidate();
                 return;
             }
             if (hwinfoRestarting) return; hwinfoRestarting = true;
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
-                bool success = false; string message = "HWiNFO64 restart failed";
+                bool success = false; string message = "HWiNFO restart failed";
                 try
                 {
-                    Process[] processes = Process.GetProcessesByName("HWiNFO64");
+                    Process[] processes = GetHWiNFOProcesses();
                     try
                     {
                         foreach (Process process in processes)
@@ -418,19 +427,19 @@ namespace VegaDesktopWidget
                     }
                     finally { foreach (Process process in processes) process.Dispose(); }
                     System.Threading.Thread.Sleep(1000);
-                    if (!WidgetConfig.IsHWiNFOExecutablePath(executable)) message = "HWiNFO64 executable was not found";
+                    if (!WidgetConfig.IsHWiNFOExecutablePath(executable)) message = "HWiNFO executable was not found";
                     else
                     {
-                        Process[] remaining = Process.GetProcessesByName("HWiNFO64");
+                        Process[] remaining = GetHWiNFOProcesses();
                         try
                         {
-                            if (remaining.Length > 0) message = "HWiNFO64 did not close";
-                            else { Process started = Process.Start(executable); if (started != null) started.Dispose(); success = true; message = "HWiNFO64 restarted"; }
+                            if (remaining.Length > 0) message = "HWiNFO did not close";
+                            else { Process started = Process.Start(executable); if (started != null) started.Dispose(); success = true; message = "HWiNFO restarted"; }
                         }
                         finally { foreach (Process process in remaining) process.Dispose(); }
                     }
                 }
-                catch { message = "Could not restart HWiNFO64"; }
+                catch { message = "Could not restart HWiNFO"; }
                 try
                 {
                     BeginInvoke((MethodInvoker)delegate
@@ -448,16 +457,16 @@ namespace VegaDesktopWidget
             Process[] processes = new Process[0];
             try
             {
-                processes = Process.GetProcessesByName("HWiNFO64");
+                processes = GetHWiNFOProcesses();
                 if (processes.Length > 0) return;
                 string executable = config.ResolveHWiNFOExecutablePath();
                 if (WidgetConfig.IsHWiNFOExecutablePath(executable))
                 {
                     Process started = Process.Start(executable); if (started != null) started.Dispose();
                 }
-                else { status = "HWiNFO64 executable was not found"; Invalidate(); }
+                else { status = "HWiNFO executable was not found"; Invalidate(); }
             }
-            catch { status = "Could not start HWiNFO64"; Invalidate(); }
+            catch { status = "Could not start HWiNFO"; Invalidate(); }
             finally { foreach (Process process in processes) process.Dispose(); }
         }
     }

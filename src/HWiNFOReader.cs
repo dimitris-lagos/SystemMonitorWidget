@@ -21,6 +21,11 @@ namespace VegaDesktopWidget
         public double Average;
         public string Key { get { return SensorId.ToString("X8") + ":" + SensorInstance.ToString("X8") + ":" + ReadingId.ToString("X8"); } }
         public string FullName { get { return Label + "  —  " + SensorName; } }
+        public bool MatchesIdentity(string label, string device)
+        {
+            bool sameLabel = String.Equals(OriginalLabel, label, StringComparison.OrdinalIgnoreCase) || String.Equals(Label, label, StringComparison.OrdinalIgnoreCase);
+            return sameLabel && (String.IsNullOrWhiteSpace(device) || String.Equals(SensorName, device, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     internal sealed class HWiNFOReader

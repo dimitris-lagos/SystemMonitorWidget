@@ -49,7 +49,7 @@ namespace VegaDesktopWidget
             topmost = AddCheck(table, "Always on top", "Keep the monitor above normal windows.", working.AlwaysOnTop);
             graphs = AddCheck(table, "Live history graphs", "Draw graph history for graph components.", working.ShowGraphs);
             launchHwinfo = AddCheck(table, "Start HWiNFO if needed", "Use HWiNFO's saved Sensors-only and Auto Start settings.", working.LaunchHWiNFO);
-            autoRestartHwinfo = AddCheck(table, "Autorestart HWiNFO64", "Restart HWiNFO64 after every 11 hours and 30 minutes of process uptime.", working.AutoRestartHWiNFO);
+            autoRestartHwinfo = AddCheck(table, "Autorestart HWiNFO", "Restart HWiNFO32 or HWiNFO64 after every 11 hours and 30 minutes of process uptime.", working.AutoRestartHWiNFO);
             startup = AddCheck(table, "Start with Windows", "Launch the widget automatically when you sign in.", WidgetConfig.IsStartupEnabled());
             AddHeading(table, "Size and refresh");
             gridLayout = AddGridChoice(table, working.GridColumns); uiScale = AddScaleChoice(table, working.UiScaleMode);
@@ -84,7 +84,7 @@ namespace VegaDesktopWidget
                 string selectedHWiNFOPath = WidgetConfig.NormalizeHWiNFOExecutablePath(hwinfoPath.Text);
                 if ((launchHwinfo.Checked || autoRestartHwinfo.Checked) && !WidgetConfig.IsHWiNFOExecutablePath(selectedHWiNFOPath))
                 {
-                    MessageBox.Show(this, "Select a valid HWiNFO64.exe before enabling HWiNFO start or autorestart.", "HWiNFO64 executable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "Select a valid HWiNFO32.exe or HWiNFO64.exe before enabling HWiNFO start or autorestart.", "HWiNFO executable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 working.HWiNFOExecutablePath = selectedHWiNFOPath;
@@ -119,21 +119,21 @@ namespace VegaDesktopWidget
         }
         private TextBox AddHWiNFOPath(TableLayoutPanel table, string value)
         {
-            Label name = NameLabel("HWiNFO64 executable"); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
+            Label name = NameLabel("HWiNFO executable"); FlowLayoutPanel panel = new FlowLayoutPanel(); panel.AutoSize = true; panel.WrapContents = false;
             TextBox control = new TextBox(); control.Text = value ?? ""; control.Width = 430;
             Button browse = new Button(); browse.Text = "Browse..."; browse.AutoSize = true; browse.Margin = new Padding(8, 0, 0, 0);
             browse.Click += delegate
             {
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
-                    dialog.Title = "Select HWiNFO64 executable";
-                    dialog.Filter = "HWiNFO64 executable|HWiNFO64.exe|Executable files|*.exe|All files|*.*";
+                    dialog.Title = "Select HWiNFO executable";
+                    dialog.Filter = "HWiNFO executables|HWiNFO32.exe;HWiNFO64.exe|Executable files|*.exe|All files|*.*";
                     string current = WidgetConfig.NormalizeHWiNFOExecutablePath(control.Text);
                     if (File.Exists(current)) { dialog.InitialDirectory = Path.GetDirectoryName(current); dialog.FileName = Path.GetFileName(current); }
                     if (dialog.ShowDialog(this) == DialogResult.OK) control.Text = dialog.FileName;
                 }
             };
-            Label hint = new Label(); hint.Text = "portable or installed HWiNFO64.exe"; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
+            Label hint = new Label(); hint.Text = "portable or installed HWiNFO32/64"; hint.AutoSize = true; hint.ForeColor = Color.Gray; hint.Margin = new Padding(8, 5, 0, 0);
             panel.Controls.Add(control); panel.Controls.Add(browse); panel.Controls.Add(hint);
             table.Controls.Add(name); table.Controls.Add(panel);
             return control;

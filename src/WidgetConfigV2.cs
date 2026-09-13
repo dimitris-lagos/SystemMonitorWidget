@@ -104,29 +104,44 @@ namespace VegaDesktopWidget
         }
         public static bool IsHWiNFOExecutablePath(string value)
         {
-            string path = NormalizeHWiNFOExecutablePath(value);
-            return File.Exists(path) && String.Equals(Path.GetFileName(path), "HWiNFO64.exe", StringComparison.OrdinalIgnoreCase);
+            try
+            {
+                string path = NormalizeHWiNFOExecutablePath(value), name = Path.GetFileName(path);
+                return File.Exists(path) && (String.Equals(name, "HWiNFO64.exe", StringComparison.OrdinalIgnoreCase) || String.Equals(name, "HWiNFO32.exe", StringComparison.OrdinalIgnoreCase));
+            }
+            catch { return false; }
         }
         public string ResolveHWiNFOExecutablePath()
         {
             string configured = NormalizeHWiNFOExecutablePath(HWiNFOExecutablePath);
-            if (configured.Length > 0) return configured;
-            Process[] processes = new Process[0];
-            try
-            {
-                processes = Process.GetProcessesByName("HWiNFO64");
-                foreach (Process process in processes)
+            if (IsHWiNFOExecutablePath(configured)) return configured;
+            string[] names = Environment.OSVersion.Version.Major <= 6 ? new string[] { "HWiNFO32.exe", "HWiNFO64.exe" } : new string[] { "HWiNFO64.exe", "HWiNFO32.exe" };
+            string appFolder = Path.GetDirectoryName(typeof(WidgetConfig).Assembly.Location) ?? "";
+            foreach (string name in names) { string candidate = NormalizeHWiNFOExecutablePath(Path.Combine(appFolder, name)); if (IsHWiNFOExecutablePath(candidate)) return candidate; }
+            string running = FindRunningHWiNFOExecutable(); if (running.Length > 0) return running;
+            string[] roots = new string[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) };
+            foreach (string root in roots)
+                foreach (string name in names)
                 {
-                    try { string active = NormalizeHWiNFOExecutablePath(process.MainModule.FileName); if (File.Exists(active)) return active; }
-                    catch { }
+                    string candidate = NormalizeHWiNFOExecutablePath(Path.Combine(root, Path.GetFileNameWithoutExtension(name), name));
+                    if (IsHWiNFOExecutablePath(candidate)) return candidate;
                 }
+            return "";
+        }
+        private static string FindRunningHWiNFOExecutable()
+        {
+            foreach (string name in new string[] { "HWiNFO64", "HWiNFO32" })
+            {
+                Process[] processes = new Process[0];
+                try
+                {
+                    processes = Process.GetProcessesByName(name);
+                    foreach (Process process in processes) { try { string path = NormalizeHWiNFOExecutablePath(process.MainModule.FileName); if (IsHWiNFOExecutablePath(path)) return path; } catch { } }
+                }
+                catch { }
+                finally { foreach (Process process in processes) process.Dispose(); }
             }
-            catch { }
-            finally { foreach (Process process in processes) process.Dispose(); }
-            string besideWidget = NormalizeHWiNFOExecutablePath(Path.Combine(Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath) ?? "", "HWiNFO64.exe"));
-            if (File.Exists(besideWidget)) return besideWidget;
-            string installed = NormalizeHWiNFOExecutablePath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "HWiNFO64", "HWiNFO64.exe"));
-            return File.Exists(installed) ? installed : "";
+            return "";
         }
         private static bool IsVersionedDefaultHeaderTitle(string value) { Version version; const string prefix = "SYSTEM MONITOR v"; return value != null && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && Version.TryParse(value.Substring(prefix.Length), out version); }
         public void SetDashboardRows(int columns, int rows) { if (columns == 3) DashboardRows3 = rows; else DashboardRows4 = rows; }
