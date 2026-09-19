@@ -145,6 +145,7 @@ namespace VegaDesktopWidget
             else if (sourceUnit.Equals("MHz", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 0;
             else if (sourceUnit.Equals("MB", StringComparison.OrdinalIgnoreCase) && value >= 1024) { displayValue = value / 1024.0; displayUnit = "GB"; automaticDecimals = 1; }
             else if (sourceUnit.Equals("GB", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 1;
+            else if (sourceUnit == "KB/s" && Math.Abs(value) > 1023) { displayValue = value / 1024.0; displayUnit = "MB/s"; automaticDecimals = 2; }
             else if (sourceUnit == "W") automaticDecimals = value < 100 ? 1 : 0;
             else if (sourceUnit.Equals("RPM", StringComparison.OrdinalIgnoreCase)) automaticDecimals = 0;
             else automaticDecimals = Math.Abs(value) < 10 ? 2 : 0;

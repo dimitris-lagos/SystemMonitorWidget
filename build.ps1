@@ -5,19 +5,23 @@ $source = Join-Path $root 'src'
 $output = Join-Path $root 'artifacts'
 $thirdParty = Join-Path $root 'third_party\OpenHardwareMonitor'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$executable = Join-Path $output 'SystemMonitorWidget-v2.6.1.exe'
+$executable = Join-Path $output 'SystemMonitorWidget-v2.6.2.exe'
 $helper = Join-Path $output 'SystemMonitorWidget.FanHelper.exe'
 $ohmLibrary = Join-Path $thirdParty 'OpenHardwareMonitorLib.dll'
 $ohmLicense = Join-Path $thirdParty 'License.html'
-$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.1-win-x64.zip'
-$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.1-win-x64.sha256.txt'
+$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.2-win-x64.zip'
+$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.2-win-x64.sha256.txt'
+$icon = Join-Path $output 'SystemMonitorWidget.ico'
+$iconGenerator = Join-Path $root 'tools\Generate-Icon.ps1'
 
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw "C# compiler not found at $compiler" }
 if (-not (Test-Path -LiteralPath $ohmLibrary -PathType Leaf)) { throw "OpenHardwareMonitorLib.dll not found at $ohmLibrary" }
 New-Item -ItemType Directory -Path $output -Force | Out-Null
+& $iconGenerator -OutputPath $icon
 
 $files = @(
     'Program.cs',
+    'UpdateService.cs',
     'HWiNFOReader.cs',
     'PhysicalMemory.cs',
     'ProcessUsageSampler.cs',
@@ -36,10 +40,12 @@ $files = @(
 ) | ForEach-Object { Join-Path $source $_ }
 
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$executable" `
+    "/win32icon:$icon" `
     /reference:System.dll `
     /reference:System.Core.dll `
     /reference:System.Drawing.dll `
     /reference:System.Windows.Forms.dll `
+    /reference:System.Runtime.Serialization.dll `
     $files
 if ($LASTEXITCODE -ne 0) { throw "Widget compilation failed with exit code $LASTEXITCODE" }
 

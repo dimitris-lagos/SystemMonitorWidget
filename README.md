@@ -37,6 +37,9 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Duplicate, delete, and reset-layout actions.
 - Interface scaling at 100%, 95%, 90%, 85%, 80%, 75%, 67%, 50%, 33%, and 25%.
 - Always-on-top, opacity, refresh interval, and Start with Windows controls in Appearance & behavior.
+- A built-in monitor-and-pulse EXE icon, generated at 16, 24, 32, 48, 64, and 256 pixels.
+- Checks GitHub's latest stable release at startup and asks before downloading or installing; **Check for updates…** is also in the gear menu.
+- Network speeds above 1023 KB/s are displayed in MB/s, including recorded minimum and maximum values.
 - Optional Super I/O fan control with automatic channel detection through the bundled OpenHardwareMonitor library.
 - Optional HWiNFO32/64 autorestart after 11 hours and 30 minutes of process uptime, configured in Appearance & behavior.
 - Portable and installed HWiNFO32/64 detection beside the widget first, then in the default Program Files locations, with an editable path shared by autostart and autorestart.
@@ -73,6 +76,15 @@ HWiNFO is a separate application and is not bundled with this repository or its 
 4. Close Open Hardware Monitor before enabling control, because two programs must not write the same controller.
 5. Select **Enable fan control after Apply / OK**. Use **Apply** to keep Configure open, or **OK** to apply and close.
 
+## Updates
+
+When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the four application files in the same folder and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
+
+If the installation folder is protected, Windows may ask for administrator approval. If an application file remains locked, the update stops and restores previous files where possible. Network failures are silent during startup; use **Check for updates…** to see the error.
+
+Windows Vista does not support the TLS 1.2 connection needed for GitHub release downloads, so its built-in update check is unavailable. Download the latest ZIP manually on another supported system and copy the four files over after closing the widget.
+
+
 ## Build from source
 
 Run PowerShell from the repository root:
@@ -81,7 +93,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.1-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.2-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
@@ -89,9 +101,9 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.6.1-win-x64.zip` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.6.2-win-x64.zip` from the [latest release](../../releases/latest).
 2. Extract all four files into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.6.1.exe`.
+5. Run `SystemMonitorWidget-v2.6.2.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

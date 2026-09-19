@@ -103,7 +103,7 @@ namespace VegaDesktopWidget
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
             BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
             hwinfoMaintenanceTimer.Interval = 60000; hwinfoMaintenanceTimer.Tick += delegate { CheckHWiNFOAutoRestart(); }; hwinfoMaintenanceTimer.Start();
-            Shown += delegate { RefreshSensors(); EnsureGearWindow(); CheckHWiNFOAutoRestart(); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
+            Shown += delegate { RefreshSensors(); EnsureGearWindow(); CheckHWiNFOAutoRestart(); UpdateService.CheckForUpdates(this, false); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
             FormClosed += delegate { hwinfoMaintenanceTimer.Stop(); hwinfoMaintenanceTimer.Dispose(); fanController.Dispose(); if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
             LocationChanged += delegate { SyncGearWindow(); }; SizeChanged += delegate { SyncGearWindow(); }; VisibleChanged += delegate { SyncGearWindow(); };
             MouseDown += HeaderMouseDown; MouseMove += HeaderMouseMove; MouseUp += HeaderMouseUp; MouseCaptureChanged += HeaderMouseCaptureChanged;
@@ -154,6 +154,7 @@ namespace VegaDesktopWidget
             menu.Items.Add(lockPositionItem); gridItem = new ToolStripMenuItem("Grid layout"); AddGridMenuItem("3 columns", 3); AddGridMenuItem("4 columns", 4); UpdateGridMenu(); menu.Items.Add(gridItem);
             scaleItem = new ToolStripMenuItem("UI scale"); AddScaleMenuItem("100% (1/1)", 100); AddScaleMenuItem("95%", 95); AddScaleMenuItem("90%", 90); AddScaleMenuItem("85%", 85); AddScaleMenuItem("80%", 80); AddScaleMenuItem("75% (3/4)", 75); AddScaleMenuItem("67% (2/3)", 67); AddScaleMenuItem("50% (1/2)", 50); AddScaleMenuItem("33% (1/3)", 33); AddScaleMenuItem("25% (1/4)", 25); UpdateScaleMenu(); menu.Items.Add(scaleItem);
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
+            menu.Items.Add("Check for updates…", null, delegate { UpdateService.CheckForUpdates(this, true); });
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
             menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); });
         }
