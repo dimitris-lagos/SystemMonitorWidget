@@ -5,12 +5,12 @@ $source = Join-Path $root 'src'
 $output = Join-Path $root 'artifacts'
 $thirdParty = Join-Path $root 'third_party\OpenHardwareMonitor'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$executable = Join-Path $output 'SystemMonitorWidget-v2.6.2.exe'
+$executable = Join-Path $output 'SystemMonitorWidget-v2.6.3.exe'
 $helper = Join-Path $output 'SystemMonitorWidget.FanHelper.exe'
 $ohmLibrary = Join-Path $thirdParty 'OpenHardwareMonitorLib.dll'
 $ohmLicense = Join-Path $thirdParty 'License.html'
-$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.2-win-x64.zip'
-$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.2-win-x64.sha256.txt'
+$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.3-win-x64.zip'
+$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.3-win-x64.sha256.txt'
 $icon = Join-Path $output 'SystemMonitorWidget.ico'
 $iconGenerator = Join-Path $root 'tools\Generate-Icon.ps1'
 
@@ -31,6 +31,7 @@ $files = @(
     'FanCurveEditor.cs',
     'FanControlSettingsPanel.cs',
     'WidgetConfigV2.cs',
+    'WidgetWorkers.cs',
     'RoleDefinitionsV2.cs',
     'WidgetComponents.cs',
     'DashboardEditor.cs',

@@ -17,7 +17,7 @@ namespace VegaDesktopWidget
         private DateTime lastFullWrite = DateTime.MinValue;
         private DateTime nextAutomaticRetryUtc = DateTime.MinValue;
         private bool automaticRetryBlocked;
-        private string status = "Fan control off";
+        private volatile string status = "Fan control off";
         public string Status { get { return status; } private set { status = value; } }
         public bool IsConnected { get { return pipe != null && pipe.IsConnected; } }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace VegaDesktopWidget
@@ -26,11 +27,12 @@ namespace VegaDesktopWidget
         private readonly WidgetConfig working; private readonly List<SensorReading> readings; private readonly FanControlClient client;
         private readonly List<TemperatureChoice> temperatureChoices = new List<TemperatureChoice>();
         private readonly List<FanSensorChannel> detectedFans = new List<FanSensorChannel>();
-        private readonly Timer rpmTimer = new Timer();
+        private readonly System.Windows.Forms.Timer rpmTimer = new System.Windows.Forms.Timer();
         private CheckBox masterEnabled, channelEnabled; private Button scanButton; private Label statusLabel, channelTitle, currentValue;
         private ListBox channelList; private TextBox displayName; private ComboBox temperatureSource, rpmSource; private NumericUpDown minimum, failSafe;
         private readonly NumericUpDown[] temperatures = new NumericUpDown[4], outputs = new NumericUpDown[4]; private FanCurveEditor curve;
         private FanProfile currentProfile; private ProfileItem currentItem; private bool suppress;
+        private int scanPending, rpmPending;
 
         public FanControlSettingsPanel(WidgetConfig config, List<SensorReading> available, FanControlClient fanClient)
         {
@@ -87,14 +89,31 @@ namespace VegaDesktopWidget
 
         private void ScanClick(object sender, EventArgs e)
         {
-            SaveCurrent(); scanButton.Enabled = false; statusLabel.Text = "Scanning Super I/O controls and RPM sensors…"; Application.DoEvents();
-            try
+            if (Interlocked.Exchange(ref scanPending, 1) != 0) return;
+            SaveCurrent(); scanButton.Enabled = false; statusLabel.Text = "Scanning Super I/O controls and RPM sensors…";
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                FanScanResult found = client.Scan(); PopulateProfiles(found.Controls, found.Fans);
-                statusLabel.Text = found.Controls.Count + " controls and " + found.Fans.Count + " RPM sensors detected. Scan made no fan changes.";
-            }
-            catch (Exception ex) { statusLabel.Text = "Scan failed: " + ex.Message; MessageBox.Show(this, ex.Message, "Fan Control scan", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
-            finally { scanButton.Enabled = true; }
+                FanScanResult found = null; string error = null;
+                try { found = client.Scan(); } catch (Exception ex) { error = ex.Message; }
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            if (IsDisposed) return;
+                            if (error == null)
+                            {
+                                PopulateProfiles(found.Controls, found.Fans);
+                                statusLabel.Text = found.Controls.Count + " controls and " + found.Fans.Count + " RPM sensors detected. Scan made no fan changes.";
+                            }
+                            else { statusLabel.Text = "Scan failed: " + error; MessageBox.Show(this, error, "Fan Control scan", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+                        }
+                        finally { if (!IsDisposed) scanButton.Enabled = true; Interlocked.Exchange(ref scanPending, 0); }
+                    });
+                }
+                catch { Interlocked.Exchange(ref scanPending, 0); }
+            });
         }
 
         private void PopulateProfiles(List<FanControlChannel> found, List<FanSensorChannel> fans)
@@ -150,16 +169,31 @@ namespace VegaDesktopWidget
 
         private void RpmTick(object sender, EventArgs e)
         {
-            if (!client.IsConnected || detectedFans.Count == 0) return;
-            try
+            if (!client.IsConnected || detectedFans.Count == 0 || Interlocked.Exchange(ref rpmPending, 1) != 0) return;
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                List<FanSensorChannel> refreshed = client.ReadFanSensors(); foreach (FanSensorChannel reading in refreshed)
+                List<FanSensorChannel> refreshed = null; string error = null;
+                try { refreshed = client.ReadFanSensors(); } catch (Exception ex) { error = ex.Message; }
+                try
                 {
-                    FanSensorChannel existing = detectedFans.Find(delegate(FanSensorChannel fan) { return fan.SensorId.Equals(reading.SensorId, StringComparison.OrdinalIgnoreCase); }); if (existing != null) existing.CurrentRpm = reading.CurrentRpm;
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        try
+                        {
+                            if (IsDisposed) return;
+                            if (error != null) { statusLabel.Text = "RPM refresh paused: " + error; return; }
+                            foreach (FanSensorChannel reading in refreshed)
+                            {
+                                FanSensorChannel existing = detectedFans.Find(delegate(FanSensorChannel fan) { return fan.SensorId.Equals(reading.SensorId, StringComparison.OrdinalIgnoreCase); });
+                                if (existing != null) existing.CurrentRpm = reading.CurrentRpm;
+                            }
+                            rpmSource.Refresh(); RefreshCurrentValue();
+                        }
+                        finally { Interlocked.Exchange(ref rpmPending, 0); }
+                    });
                 }
-                rpmSource.Refresh(); RefreshCurrentValue();
-            }
-            catch (Exception ex) { statusLabel.Text = "RPM refresh paused: " + ex.Message; }
+                catch { Interlocked.Exchange(ref rpmPending, 0); }
+            });
         }
         private void RefreshCurrentValue()
         {

@@ -66,12 +66,14 @@ namespace VegaDesktopWidget
         private static extern ulong GetTickCount64();
 
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
-        private readonly HWiNFOReader reader = new HWiNFOReader();
         private readonly Timer timer = new Timer();
         private readonly Timer hwinfoMaintenanceTimer = new Timer();
-        private readonly ProcessUsageSampler processSampler = new ProcessUsageSampler();
         private readonly FanControlClient fanController = new FanControlClient();
-        private bool settingsOpen;
+        private readonly SensorPollingWorker sensorWorker;
+        private readonly ProcessPollingWorker processWorker;
+        private readonly FanCurveWorker fanWorker;
+        private long displayedSequence, displayedProcessSequence;
+        private bool pendingFanErrorNotice;
         private WidgetConfig config;
         private List<SensorReading> readings = new List<SensorReading>();
         private List<ProcessUsage> topProcesses = new List<ProcessUsage>();
@@ -80,7 +82,10 @@ namespace VegaDesktopWidget
         private readonly WidgetComponents components = new WidgetComponents();
         private double ramUsed, ramTotal; private bool ramAvailable;
         private string status = "Starting";
-        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, lockPositionItem, scaleItem, gridItem, processItem; private GearButtonForm gearWindow;
+        private ContextMenuStrip menu; private ToolStripMenuItem topmostItem, lockPositionItem, scaleItem, gridItem, processItem, visibilityItem; private GearButtonForm gearWindow;
+        private NotifyIcon trayIcon;
+        private Icon trayIconImage;
+        private bool openingFromGear;
         private int lastMenuAppCloseTick = -10000;
         private static readonly TimeSpan HWiNFORestartInterval = TimeSpan.FromMinutes(690);
         private bool hwinfoRestarting;
@@ -101,10 +106,23 @@ namespace VegaDesktopWidget
             DoubleBuffered = true; BackColor = Color.FromArgb(13, 17, 23); ForeColor = Color.White;
             ApplyWidgetSize(); Location = ClampLocation(new Point(config.Left, config.Top));
             TopMost = config.AlwaysOnTop; Opacity = config.OpacityPercent / 100.0;
-            BuildMenu(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
+            fanWorker = new FanCurveWorker(fanController);
+            fanWorker.Configure(config.FanControlEnabled, config.FanProfiles, config.RefreshMilliseconds);
+            sensorWorker = new SensorPollingWorker(config.RefreshMilliseconds, fanWorker.PublishReadings);
+            processWorker = new ProcessPollingWorker(config.RefreshMilliseconds, config.ProcessStripMode);
+            BuildMenu(); InitializeTrayIcon(); timer.Interval = config.RefreshMilliseconds; timer.Tick += delegate { RefreshSensors(); }; timer.Start();
             hwinfoMaintenanceTimer.Interval = 60000; hwinfoMaintenanceTimer.Tick += delegate { CheckHWiNFOAutoRestart(); }; hwinfoMaintenanceTimer.Start();
             Shown += delegate { RefreshSensors(); EnsureGearWindow(); CheckHWiNFOAutoRestart(); UpdateService.CheckForUpdates(this, false); }; FormClosing += delegate { config.Left = Left; config.Top = Top; config.Save(); };
-            FormClosed += delegate { hwinfoMaintenanceTimer.Stop(); hwinfoMaintenanceTimer.Dispose(); fanController.Dispose(); if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close(); };
+            FormClosed += delegate
+            {
+                timer.Stop(); hwinfoMaintenanceTimer.Stop(); hwinfoMaintenanceTimer.Dispose();
+                if (menu != null) { menu.Opening -= MenuOpening; menu.Closed -= MenuClosed; }
+                if (trayIcon != null) { trayIcon.Visible = false; trayIcon.Dispose(); }
+                if (trayIconImage != null) trayIconImage.Dispose();
+                sensorWorker.Stop(); processWorker.Stop(); fanWorker.Stop();
+                if (gearWindow != null && !gearWindow.IsDisposed) gearWindow.Close();
+                if (menu != null) menu.Dispose();
+            };
             LocationChanged += delegate { SyncGearWindow(); }; SizeChanged += delegate { SyncGearWindow(); }; VisibleChanged += delegate { SyncGearWindow(); };
             MouseDown += HeaderMouseDown; MouseMove += HeaderMouseMove; MouseUp += HeaderMouseUp; MouseCaptureChanged += HeaderMouseCaptureChanged;
             if (config.LaunchHWiNFO) LaunchHWiNFO();
@@ -146,7 +164,7 @@ namespace VegaDesktopWidget
 
         private void BuildMenu()
         {
-            menu = new ContextMenuStrip(); menu.Closed += MenuClosed; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { RefreshSensors(); });
+            menu = new ContextMenuStrip(); menu.Opening += MenuOpening; menu.Closed += MenuClosed; menu.Items.Add("Configure dashboard…", null, delegate { ShowSettings(); }); menu.Items.Add("Refresh now", null, delegate { sensorWorker.RefreshNow(); });
             topmostItem = new ToolStripMenuItem("Always on top"); topmostItem.Checked = config.AlwaysOnTop;
             topmostItem.Click += delegate { config.AlwaysOnTop = !config.AlwaysOnTop; TopMost = config.AlwaysOnTop; topmostItem.Checked = config.AlwaysOnTop; SyncGearWindow(); config.Save(); };
             menu.Items.Add(topmostItem); lockPositionItem = new ToolStripMenuItem("Lock position"); lockPositionItem.Checked = config.LockPosition;
@@ -156,7 +174,31 @@ namespace VegaDesktopWidget
             processItem = new ToolStripMenuItem("Header processes"); AddProcessMenuItem("No", 0); AddProcessMenuItem("Top CPU", 1); AddProcessMenuItem("Top RAM", 2); UpdateProcessMenu(); menu.Items.Add(processItem);
             menu.Items.Add("Check for updates…", null, delegate { UpdateService.CheckForUpdates(this, true); });
             menu.Items.Add("Start HWiNFO", null, delegate { LaunchHWiNFO(); }); menu.Items.Add("Reset position", null, delegate { Location = new Point(60, 60); });
-            menu.Items.Add(new ToolStripSeparator()); menu.Items.Add("Exit", null, delegate { Close(); });
+            menu.Items.Add(new ToolStripSeparator());
+            visibilityItem = new ToolStripMenuItem("Hide widget"); visibilityItem.Visible = false;
+            visibilityItem.Click += delegate { ToggleWidgetVisibility(); }; menu.Items.Add(visibilityItem);
+            menu.Items.Add("Exit", null, delegate { Close(); });
+        }
+
+        private void InitializeTrayIcon()
+        {
+            try { trayIconImage = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            trayIcon = new NotifyIcon(); trayIcon.Icon = trayIconImage ?? SystemIcons.Application;
+            trayIcon.Text = "System Monitor Widget"; trayIcon.ContextMenuStrip = menu;
+            trayIcon.DoubleClick += delegate { ShowWidget(); };
+            trayIcon.Visible = true;
+        }
+
+        private void ShowWidget()
+        {
+            if (Visible) return;
+            Show(); BringToFront(); SyncGearWindow(); RefreshSensors();
+        }
+
+        private void ToggleWidgetVisibility()
+        {
+            if (Visible) { FinishHeaderDrag(); Hide(); }
+            else ShowWidget();
         }
 
         private void AddGridMenuItem(string text, int columns) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = columns; item.Click += delegate { SetGridColumns(columns); }; gridItem.DropDownItems.Add(item); }
@@ -166,17 +208,32 @@ namespace VegaDesktopWidget
         private void SetUiScale(int mode) { config.UiScaleMode = WidgetConfig.IsUiScaleMode(mode) ? mode : 100; ApplyWidgetSize(); Location = ClampLocation(Location); SyncGearWindow(); UpdateScaleMenu(); config.Save(); Invalidate(); }
         private void UpdateScaleMenu() { if (scaleItem == null) return; foreach (ToolStripItem raw in scaleItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.UiScaleMode; } }
         private void AddProcessMenuItem(string text, int mode) { ToolStripMenuItem item = new ToolStripMenuItem(text); item.Tag = mode; item.Click += delegate { SetProcessMode(mode); }; processItem.DropDownItems.Add(item); }
-        private void SetProcessMode(int mode) { config.ProcessStripMode = Math.Max(0, Math.Min(2, mode)); topProcesses.Clear(); UpdateProcessMenu(); config.Save(); RefreshSensors(); }
+        private void SetProcessMode(int mode) { config.ProcessStripMode = Math.Max(0, Math.Min(2, mode)); topProcesses.Clear(); UpdateProcessMenu(); config.Save(); processWorker.Configure(config.RefreshMilliseconds, config.ProcessStripMode); Invalidate(); }
         private void UpdateProcessMenu() { if (processItem == null) return; foreach (ToolStripItem raw in processItem.DropDownItems) { ToolStripMenuItem item = raw as ToolStripMenuItem; if (item != null) item.Checked = (int)item.Tag == config.ProcessStripMode; } }
         private void ApplyWidgetSize() { float scale = UiScale; Size scaled = new Size(Math.Max(1, (int)Math.Round(config.Width * scale)), Math.Max(1, (int)Math.Round(LogicalHeight * scale))); MinimumSize = Size.Empty; MaximumSize = Size.Empty; Size = scaled; MinimumSize = scaled; MaximumSize = scaled; ApplyWindowRegion(); }
         private void ApplyWindowRegion() { if (Width <= 0 || Height <= 0) return; using (GraphicsPath path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Max(2, (int)Math.Round(14 * UiScale)))) Region = new Region(path); }
 
         private void RefreshSensors()
         {
-            readings = reader.Read(out status); ramAvailable = PhysicalMemory.Read(out ramUsed, out ramTotal);
+            if (menu != null && menu.Visible) return;
+            if (pendingFanErrorNotice && Visible)
+            {
+                string fanStatus = fanController.Status;
+                if (fanStatus.StartsWith("Fan control error", StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingFanErrorNotice = false;
+                    MessageBox.Show(this, fanStatus, "Fan Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                else if (fanStatus.StartsWith("Fan control live", StringComparison.OrdinalIgnoreCase)) pendingFanErrorNotice = false;
+            }
+            List<ProcessUsage> processes = processWorker.TakeLatest(ref displayedProcessSequence);
+            if (processes != null) topProcesses = config.ProcessStripMode == 0 ? new List<ProcessUsage>() : processes;
+            SensorSnapshot snapshot = sensorWorker.TakeLatest(displayedSequence);
+            if (snapshot == null) { if (processes != null) Invalidate(); return; }
+            displayedSequence = snapshot.Sequence;
+            readings = snapshot.Readings; status = snapshot.Status;
+            ramAvailable = snapshot.RamAvailable; ramUsed = snapshot.RamUsed; ramTotal = snapshot.RamTotal;
             if (readings.Count > 0 && HardwareSectionNames.Apply(config, readings)) config.Save();
-            if (!settingsOpen) fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
-            if (config.ProcessStripMode == 0) topProcesses.Clear(); else topProcesses = processSampler.SampleTop(3, config.ProcessStripMode == 1);
             foreach (DashboardItem item in config.ActiveDashboard)
             {
                 if (item.BoxType == DashboardBoxType.Section) continue;
@@ -363,28 +420,33 @@ namespace VegaDesktopWidget
         {
             if (menu.Visible) { menu.Close(ToolStripDropDownCloseReason.CloseCalled); return; }
             int elapsed = unchecked(Environment.TickCount - lastMenuAppCloseTick); if (elapsed >= 0 && elapsed < 300) { lastMenuAppCloseTick = -10000; return; }
-            menu.Show(gearWindow, new Point(0, gearWindow.Height + 2));
+            openingFromGear = true;
+            try { menu.Show(gearWindow, new Point(0, gearWindow.Height + 2)); }
+            finally { openingFromGear = false; }
+        }
+        private void MenuOpening(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            visibilityItem.Text = Visible ? "Hide widget" : "Show widget";
+            visibilityItem.Visible = !openingFromGear;
         }
         private void MenuClosed(object sender, ToolStripDropDownClosedEventArgs e)
         {
             if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked) lastMenuAppCloseTick = Environment.TickCount;
+            visibilityItem.Visible = false;
+            RefreshSensors();
         }
 
         private Point ClampLocation(Point p) { Rectangle work = Screen.PrimaryScreen.WorkingArea; return new Point(Math.Max(work.Left, Math.Min(work.Right - Width, p.X)), Math.Max(work.Top, Math.Min(work.Bottom - Height, p.Y))); }
         private void ShowSettings()
         {
-            bool accepted = false; settingsOpen = true;
-            try
+            bool accepted = false;
+            using (SettingsForm form = new SettingsForm(config, readings, fanController))
             {
-                using (SettingsForm form = new SettingsForm(config, readings, fanController))
-                {
-                    form.Applied += delegate { ApplySettingsResult(form.Result); };
-                    accepted = form.ShowDialog(this) == DialogResult.OK;
-                    if (accepted) ApplySettingsResult(form.Result);
-                }
+                form.Applied += delegate { ApplySettingsResult(form.Result); };
+                accepted = form.ShowDialog(this) == DialogResult.OK;
+                if (accepted) ApplySettingsResult(form.Result);
             }
-            finally { settingsOpen = false; }
-            if (accepted) RefreshSensors(); else fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
+            if (accepted) { sensorWorker.RefreshNow(); RefreshSensors(); }
         }
 
         private void ApplySettingsResult(WidgetConfig updated)
@@ -392,9 +454,10 @@ namespace VegaDesktopWidget
             config = updated; ApplyWidgetSize(); Location = ClampLocation(Location); TopMost = config.AlwaysOnTop;
             Opacity = config.OpacityPercent / 100.0; timer.Interval = config.RefreshMilliseconds;
             topmostItem.Checked = config.AlwaysOnTop; lockPositionItem.Checked = config.LockPosition; UpdateGridMenu(); UpdateScaleMenu(); SyncGearWindow(); config.Save(); Invalidate();
-            fanController.PrepareConfigurationApply(); fanController.Update(config.FanControlEnabled, config.FanProfiles, readings);
-            if (config.FanControlEnabled && fanController.Status.StartsWith("Fan control error", StringComparison.OrdinalIgnoreCase))
-                MessageBox.Show(this, fanController.Status, "Fan Control", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            sensorWorker.Configure(config.RefreshMilliseconds);
+            processWorker.Configure(config.RefreshMilliseconds, config.ProcessStripMode);
+            pendingFanErrorNotice = config.FanControlEnabled;
+            fanWorker.Configure(config.FanControlEnabled, config.FanProfiles, config.RefreshMilliseconds);
             CheckHWiNFOAutoRestart();
         }
         private static bool IsHWiNFORestartDue(DateTime startedUtc, DateTime nowUtc) { return nowUtc - startedUtc >= HWiNFORestartInterval; }

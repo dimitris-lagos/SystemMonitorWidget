@@ -93,7 +93,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.2-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.3-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
@@ -101,9 +101,9 @@ Widget settings stay in the current Windows user's local application-data folder
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.6.2-win-x64.zip` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.6.3-win-x64.zip` from the [latest release](../../releases/latest).
 2. Extract all four files into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.6.2.exe`.
+5. Run `SystemMonitorWidget-v2.6.3.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.
