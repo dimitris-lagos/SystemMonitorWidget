@@ -64,6 +64,12 @@ namespace VegaDesktopWidget
     {
         [DllImport("kernel32.dll")]
         private static extern ulong GetTickCount64();
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool GetProcessTimes(IntPtr process, out System.Runtime.InteropServices.ComTypes.FILETIME creation, out System.Runtime.InteropServices.ComTypes.FILETIME exit, out System.Runtime.InteropServices.ComTypes.FILETIME kernel, out System.Runtime.InteropServices.ComTypes.FILETIME user);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
 
         private const int DashboardTop = 62, SlotHeight = 31, RowGap = 5, ColumnGap = 8, BottomPadding = 11;
         private readonly Timer timer = new Timer();
@@ -88,8 +94,12 @@ namespace VegaDesktopWidget
         private bool openingFromGear;
         private int lastMenuAppCloseTick = -10000;
         private static readonly TimeSpan HWiNFORestartInterval = TimeSpan.FromMinutes(690);
+        private static readonly TimeSpan HWiNFOSharedMemoryGrace = TimeSpan.FromMinutes(2);
+        private static readonly object hwinfoLogSync = new object();
         private bool hwinfoRestarting;
         private DateTime hwinfoRestartRetryUtc = DateTime.MinValue;
+        private DateTime hwinfoSharedMemoryMissingSinceUtc = DateTime.MinValue;
+        private bool hwinfoSharedMemoryStateKnown, hwinfoSharedMemoryWasAvailable;
         private bool draggingHeader;
         private Point dragMouseStart, dragWindowStart;
 
@@ -462,11 +472,52 @@ namespace VegaDesktopWidget
         }
         private static bool IsHWiNFORestartDue(DateTime startedUtc, DateTime nowUtc) { return nowUtc - startedUtc >= HWiNFORestartInterval; }
 
+        private static bool TryGetProcessStartTimeUtc(Process process, out DateTime startedUtc, out Exception error)
+        {
+            startedUtc = DateTime.MinValue; error = null;
+            try { startedUtc = process.StartTime.ToUniversalTime(); return true; }
+            catch (Exception first)
+            {
+                IntPtr handle = IntPtr.Zero;
+                try
+                {
+                    handle = OpenProcess(0x1000, false, process.Id); if (handle == IntPtr.Zero) handle = OpenProcess(0x0400, false, process.Id);
+                    if (handle == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Could not open HWiNFO process for an uptime check.");
+                    System.Runtime.InteropServices.ComTypes.FILETIME creation, exit, kernel, user;
+                    if (!GetProcessTimes(handle, out creation, out exit, out kernel, out user)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Could not read HWiNFO process start time.");
+                    long fileTime = ((long)creation.dwHighDateTime << 32) + (uint)creation.dwLowDateTime; startedUtc = DateTime.FromFileTimeUtc(fileTime); return true;
+                }
+                catch (Exception second) { error = new InvalidOperationException("Both HWiNFO uptime checks failed.", new AggregateException(first, second)); return false; }
+                finally { if (handle != IntPtr.Zero) CloseHandle(handle); }
+            }
+        }
+
+        private static string HWiNFOLogPath { get { return Path.Combine(WidgetConfig.Folder, "HWiNFO-autorestart.log"); } }
+        private static void LogHWiNFOMaintenance(string message) { LogHWiNFOMaintenance(message, null); }
+        private static void LogHWiNFOMaintenance(string message, Exception exception)
+        {
+            try
+            {
+                lock (hwinfoLogSync)
+                {
+                    Directory.CreateDirectory(WidgetConfig.Folder); string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture) + " [widget] " + message;
+                    if (exception != null) line += Environment.NewLine + exception; File.AppendAllText(HWiNFOLogPath, line + Environment.NewLine, new System.Text.UTF8Encoding(false));
+                }
+            }
+            catch { }
+        }
+
         private static Process[] GetHWiNFOProcesses()
         {
             List<Process> result = new List<Process>();
             foreach (string name in new string[] { "HWiNFO64", "HWiNFO32" }) { try { result.AddRange(Process.GetProcessesByName(name)); } catch { } }
             return result.ToArray();
+        }
+        private static bool HasHWiNFOProcess()
+        {
+            Process[] processes = GetHWiNFOProcesses();
+            try { return processes.Length > 0; }
+            finally { foreach (Process process in processes) process.Dispose(); }
         }
         private void CheckHWiNFOAutoRestart()
         {
@@ -474,69 +525,100 @@ namespace VegaDesktopWidget
             Process[] processes = GetHWiNFOProcesses();
             try
             {
+                string sharedMemoryDetail; bool sharedMemoryAvailable = HWiNFOReader.IsSharedMemoryAvailable(out sharedMemoryDetail);
+                if (!hwinfoSharedMemoryStateKnown || sharedMemoryAvailable != hwinfoSharedMemoryWasAvailable)
+                {
+                    LogHWiNFOMaintenance(sharedMemoryDetail); hwinfoSharedMemoryStateKnown = true; hwinfoSharedMemoryWasAvailable = sharedMemoryAvailable;
+                }
+                if (sharedMemoryAvailable) hwinfoSharedMemoryMissingSinceUtc = DateTime.MinValue;
+                else if (hwinfoSharedMemoryMissingSinceUtc == DateTime.MinValue) hwinfoSharedMemoryMissingSinceUtc = DateTime.UtcNow;
+
+                if (processes.Length == 0) { RestartHWiNFOAsync(config.ResolveHWiNFOExecutablePath(), "no HWiNFO process is running"); return; }
                 foreach (Process process in processes)
                 {
-                    try { if (IsHWiNFORestartDue(process.StartTime.ToUniversalTime(), DateTime.UtcNow)) { RestartHWiNFOAsync(config.ResolveHWiNFOExecutablePath()); return; } }
-                    catch { }
+                    DateTime startedUtc; Exception error;
+                    if (TryGetProcessStartTimeUtc(process, out startedUtc, out error))
+                    {
+                        if (IsHWiNFORestartDue(startedUtc, DateTime.UtcNow)) { RestartHWiNFOAsync(config.ResolveHWiNFOExecutablePath(), "process uptime reached 11 hours and 30 minutes"); return; }
+                    }
+                    else LogHWiNFOMaintenance("Could not determine uptime for HWiNFO process ID " + process.Id + ".", error);
                 }
+                if (!sharedMemoryAvailable && DateTime.UtcNow - hwinfoSharedMemoryMissingSinceUtc >= HWiNFOSharedMemoryGrace)
+                    RestartHWiNFOAsync(config.ResolveHWiNFOExecutablePath(), "shared memory remained unavailable for 2 minutes");
             }
             finally { foreach (Process process in processes) process.Dispose(); }
         }
 
-        private void RestartHWiNFOAsync(string executablePath)
+        private void RestartHWiNFOAsync(string executablePath, string reason)
         {
             string executable = WidgetConfig.NormalizeHWiNFOExecutablePath(executablePath);
             if (!WidgetConfig.IsHWiNFOExecutablePath(executable))
             {
                 hwinfoRestartRetryUtc = DateTime.UtcNow.AddMinutes(15);
                 status = "HWiNFO executable was not found";
+                LogHWiNFOMaintenance("Restart skipped because the configured HWiNFO executable was not found: " + executable);
                 Invalidate();
                 return;
             }
             if (hwinfoRestarting) return; hwinfoRestarting = true;
+            LogHWiNFOMaintenance("Automatic restart requested because " + reason + ".");
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 bool success = false; string message = "HWiNFO restart failed";
                 try
                 {
-                    Process[] processes = GetHWiNFOProcesses();
+                    string helper = ResolveHWiNFORestartHelperPath();
+                    Directory.CreateDirectory(WidgetConfig.Folder); string resultPath = Path.Combine(WidgetConfig.Folder, "HWiNFO-restart-" + Guid.NewGuid().ToString("N") + ".result");
                     try
                     {
-                        foreach (Process process in processes)
-                        {
-                            if (!process.HasExited)
-                            {
-                                bool closing = process.CloseMainWindow();
-                                if (closing) process.WaitForExit(10000);
-                                if (!process.HasExited) { process.Kill(); process.WaitForExit(5000); }
-                            }
-                        }
+                        ProcessStartInfo start = new ProcessStartInfo(); start.FileName = helper; start.Arguments = "--executable " + QuoteArgument(executable) + " --result " + QuoteArgument(resultPath) + " --log " + QuoteArgument(HWiNFOLogPath);
+                        start.UseShellExecute = true; start.Verb = "runas"; start.WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                        Process helperProcess = Process.Start(start); if (helperProcess == null) throw new InvalidOperationException("Windows did not start the elevated HWiNFO restart helper.");
+                        using (helperProcess) { if (!helperProcess.WaitForExit(75000)) { try { helperProcess.Kill(); } catch { } throw new TimeoutException("The elevated HWiNFO restart helper timed out."); } }
+                        if (!File.Exists(resultPath)) throw new IOException("The HWiNFO restart helper did not return a result.");
+                        string result = File.ReadAllText(resultPath).Trim(); if (!result.StartsWith("OK|", StringComparison.Ordinal)) throw new InvalidOperationException(result.StartsWith("ERROR|", StringComparison.Ordinal) ? result.Substring(6) : "Unexpected restart-helper result: " + result);
+                        string detail; success = HWiNFOReader.IsSharedMemoryAvailable(out detail) && HasHWiNFOProcess();
+                        if (!success) throw new InvalidOperationException("The helper completed, but final widget verification failed: " + detail + ".");
+                        message = "HWiNFO restarted"; LogHWiNFOMaintenance("Automatic restart completed and shared memory was verified. Helper result: " + result);
                     }
-                    finally { foreach (Process process in processes) process.Dispose(); }
-                    System.Threading.Thread.Sleep(1000);
-                    if (!WidgetConfig.IsHWiNFOExecutablePath(executable)) message = "HWiNFO executable was not found";
-                    else
-                    {
-                        Process[] remaining = GetHWiNFOProcesses();
-                        try
-                        {
-                            if (remaining.Length > 0) message = "HWiNFO did not close";
-                            else { Process started = Process.Start(executable); if (started != null) started.Dispose(); success = true; message = "HWiNFO restarted"; }
-                        }
-                        finally { foreach (Process process in remaining) process.Dispose(); }
-                    }
+                    finally { try { if (File.Exists(resultPath)) File.Delete(resultPath); } catch { } }
                 }
-                catch { message = "Could not restart HWiNFO"; }
+                catch (System.ComponentModel.Win32Exception ex) { message = ex.NativeErrorCode == 1223 ? "HWiNFO restart approval was cancelled" : "Could not start HWiNFO restart helper"; LogHWiNFOMaintenance(message + ".", ex); }
+                catch (Exception ex) { message = "Could not restart HWiNFO"; LogHWiNFOMaintenance(message + ".", ex); }
                 try
                 {
                     BeginInvoke((MethodInvoker)delegate
                     {
                         hwinfoRestarting = false; hwinfoRestartRetryUtc = success ? DateTime.MinValue : DateTime.UtcNow.AddMinutes(15);
+                        if (success) { hwinfoSharedMemoryMissingSinceUtc = DateTime.MinValue; hwinfoSharedMemoryStateKnown = true; hwinfoSharedMemoryWasAvailable = true; }
                         status = message; Invalidate();
                     });
                 }
                 catch { hwinfoRestarting = false; }
             });
+        }
+
+        private static string QuoteArgument(string value) { return "\"" + (value ?? "").Replace("\"", "\\\"") + "\""; }
+
+        private static string ResolveHWiNFORestartHelperPath()
+        {
+            const string fileName = "SystemMonitorWidget.HWiNFORestartHelper.exe";
+            string packaged = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName); if (File.Exists(packaged)) return packaged;
+            Directory.CreateDirectory(WidgetConfig.Folder); string extracted = Path.Combine(WidgetConfig.Folder, fileName);
+            Version expected = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            try { if (File.Exists(extracted) && FileVersionInfo.GetVersionInfo(extracted).FileVersion == expected.ToString()) return extracted; }
+            catch { }
+            string temporary = extracted + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (Stream resource = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("VegaDesktopWidget.HWiNFORestartHelper.exe"))
+                {
+                    if (resource == null) throw new FileNotFoundException("The embedded HWiNFO restart helper is missing.");
+                    using (FileStream output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)) resource.CopyTo(output);
+                }
+                File.Copy(temporary, extracted, true); return extracted;
+            }
+            finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
         }
 
         private void LaunchHWiNFO()

@@ -17,7 +17,7 @@ namespace VegaDesktopWidget
     internal static class UpdateService
     {
         private const string LatestApi = "https://api.github.com/repos/dimitris-lagos/SystemMonitorWidget/releases/latest";
-        private static readonly string[] PackageFiles = { "SystemMonitorWidget.FanHelper.exe", "OpenHardwareMonitorLib.dll", "OpenHardwareMonitor-License.html" };
+        private static readonly string[] PackageFiles = { "SystemMonitorWidget.FanHelper.exe", "SystemMonitorWidget.HWiNFORestartHelper.exe", "OpenHardwareMonitorLib.dll", "OpenHardwareMonitor-License.html" };
         private static int checking;
 
         [DataContract]
@@ -227,8 +227,9 @@ namespace VegaDesktopWidget
         internal static void InstallFiles(string stage, string targetExe, string exeName)
         {
             string directory = Path.GetDirectoryName(targetExe);
-            string[] sources = { PackageFiles[0], PackageFiles[1], PackageFiles[2], exeName };
-            string[] targets = { PackageFiles[0], PackageFiles[1], PackageFiles[2], Path.GetFileName(targetExe) };
+            string[] sources = new string[PackageFiles.Length + 1], targets = new string[PackageFiles.Length + 1];
+            Array.Copy(PackageFiles, sources, PackageFiles.Length); Array.Copy(PackageFiles, targets, PackageFiles.Length);
+            sources[PackageFiles.Length] = exeName; targets[PackageFiles.Length] = Path.GetFileName(targetExe);
             string backup = Path.Combine(stage, "backup");
             Directory.CreateDirectory(backup);
             List<int> touched = new List<int>();

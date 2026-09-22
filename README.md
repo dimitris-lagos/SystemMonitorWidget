@@ -41,7 +41,8 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Checks GitHub's latest stable release at startup and asks before downloading or installing; **Check for updates…** is also in the gear menu.
 - Network speeds above 1023 KB/s are displayed in MB/s, including recorded minimum and maximum values.
 - Optional Super I/O fan control with automatic channel detection through the bundled OpenHardwareMonitor library.
-- Optional HWiNFO32/64 autorestart after 11 hours and 30 minutes of process uptime, configured in Appearance & behavior.
+- Optional HWiNFO32/64 autorestart after 11 hours and 30 minutes of process uptime, plus automatic recovery when shared memory remains unavailable for two minutes.
+- HWiNFO restarts run through a separate administrator helper and count as successful only after a new process and active shared memory are verified; the main EXE contains a fallback copy of the helper for upgrades from older releases, and detailed attempts are written to `%LOCALAPPDATA%\VegaDesktopWidget\HWiNFO-autorestart.log`.
 - Portable and installed HWiNFO32/64 detection beside the widget first, then in the default Program Files locations, with an editable path shared by autostart and autorestart.
 - Four-point interactive fan curves bound to any live HWiNFO temperature sensor.
 - Each control can be paired with a live Super I/O RPM sensor; matching control/fan indices are paired automatically after scanning.
@@ -55,7 +56,7 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Windows Vista, 7, 8, 8.1, 10, or 11, 64-bit.
 - HWiNFO32 or HWiNFO64 with Shared Memory Support enabled.
 - .NET Framework 4.x.
-- Administrator approval when scanning or enabling Super I/O fan control.
+- Administrator approval when scanning or enabling Super I/O fan control and when the HWiNFO restart helper runs.
 
 HWiNFO is a separate application and is not bundled with this repository or its releases.
 
@@ -78,11 +79,11 @@ HWiNFO is a separate application and is not bundled with this repository or its 
 
 ## Updates
 
-When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the four application files in the same folder and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
+When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the five application files in the same folder and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
 
 If the installation folder is protected, Windows may ask for administrator approval. If an application file remains locked, the update stops and restores previous files where possible. Network failures are silent during startup; use **Check for updates…** to see the error.
 
-Windows Vista does not support the TLS 1.2 connection needed for GitHub release downloads, so its built-in update check is unavailable. Download the latest ZIP manually on another supported system and copy the four files over after closing the widget.
+Windows Vista does not support the TLS 1.2 connection needed for GitHub release downloads, so its built-in update check is unavailable. Download the latest ZIP manually on another supported system and copy the five files over after closing the widget.
 
 
 ## Build from source
@@ -93,17 +94,17 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.3-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.4-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
-Widget settings stay in the current Windows user's local application-data folder. The repository contains no exported sensor logs, local settings, or user-specific paths.
+Widget settings and the HWiNFO autorestart diagnostic log stay in the current Windows user's local application-data folder. The repository contains no exported sensor logs, local settings, or user-specific paths.
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.6.3-win-x64.zip` from the [latest release](../../releases/latest).
-2. Extract all four files into the same folder.
+1. Download `SystemMonitorWidget-v2.6.4-win-x64.zip` from the [latest release](../../releases/latest).
+2. Extract all five files into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.6.3.exe`.
+5. Run `SystemMonitorWidget-v2.6.4.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

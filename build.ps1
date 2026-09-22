@@ -5,12 +5,13 @@ $source = Join-Path $root 'src'
 $output = Join-Path $root 'artifacts'
 $thirdParty = Join-Path $root 'third_party\OpenHardwareMonitor'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$executable = Join-Path $output 'SystemMonitorWidget-v2.6.3.exe'
+$executable = Join-Path $output 'SystemMonitorWidget-v2.6.4.exe'
 $helper = Join-Path $output 'SystemMonitorWidget.FanHelper.exe'
+$hwinfoRestartHelper = Join-Path $output 'SystemMonitorWidget.HWiNFORestartHelper.exe'
 $ohmLibrary = Join-Path $thirdParty 'OpenHardwareMonitorLib.dll'
 $ohmLicense = Join-Path $thirdParty 'License.html'
-$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.3-win-x64.zip'
-$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.3-win-x64.sha256.txt'
+$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.4-win-x64.zip'
+$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.4-win-x64.sha256.txt'
 $icon = Join-Path $output 'SystemMonitorWidget.ico'
 $iconGenerator = Join-Path $root 'tools\Generate-Icon.ps1'
 
@@ -40,8 +41,17 @@ $files = @(
     'Properties\AssemblyInfo.cs'
 ) | ForEach-Object { Join-Path $source $_ }
 
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$hwinfoRestartHelper" `
+    "/win32manifest:$(Join-Path $source 'HWiNFORestartHelper.manifest')" `
+    /reference:System.dll `
+    /reference:System.Core.dll `
+    (Join-Path $source 'HWiNFORestartHelperProgram.cs') `
+    (Join-Path $source 'Properties\AssemblyInfo.cs')
+if ($LASTEXITCODE -ne 0) { throw "HWiNFO restart helper compilation failed with exit code $LASTEXITCODE" }
+
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$executable" `
     "/win32icon:$icon" `
+    "/resource:$hwinfoRestartHelper,VegaDesktopWidget.HWiNFORestartHelper.exe" `
     /reference:System.dll `
     /reference:System.Core.dll `
     /reference:System.Drawing.dll `
@@ -64,7 +74,7 @@ $bundledLicense = Join-Path $output 'OpenHardwareMonitor-License.html'
 Copy-Item -LiteralPath $ohmLibrary -Destination $bundledLibrary -Force
 Copy-Item -LiteralPath $ohmLicense -Destination $bundledLicense -Force
 if (Test-Path -LiteralPath $bundle) { Remove-Item -LiteralPath $bundle -Force }
-Compress-Archive -LiteralPath $executable, $helper, $bundledLibrary, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
+Compress-Archive -LiteralPath $executable, $helper, $hwinfoRestartHelper, $bundledLibrary, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
 $bundleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundle).Hash
 [IO.File]::WriteAllText($checksum, $bundleHash + '  ' + [IO.Path]::GetFileName($bundle) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
-Get-Item -LiteralPath $executable, $helper, $bundledLibrary, $bundledLicense, $bundle, $checksum
+Get-Item -LiteralPath $executable, $helper, $hwinfoRestartHelper, $bundledLibrary, $bundledLicense, $bundle, $checksum

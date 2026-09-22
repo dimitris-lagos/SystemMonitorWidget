@@ -42,6 +42,21 @@ namespace VegaDesktopWidget
         [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForSingleObject(IntPtr h, uint ms);
         [DllImport("kernel32.dll")] private static extern bool ReleaseMutex(IntPtr h);
 
+        public static bool IsSharedMemoryAvailable(out string detail)
+        {
+            detail = "Global\\HWiNFO_SENS_SM2 is unavailable";
+            IntPtr mapping = OpenFileMapping(FileMapRead, false, MapName); if (mapping == IntPtr.Zero) return false;
+            IntPtr view = IntPtr.Zero;
+            try
+            {
+                view = MapViewOfFile(mapping, FileMapRead, 0, 0, UIntPtr.Zero);
+                if (view == IntPtr.Zero) { detail = "Global\\HWiNFO_SENS_SM2 could not be mapped"; return false; }
+                if (ReadUInt32(view, 0) != SignatureActive) { detail = "Global\\HWiNFO_SENS_SM2 is inactive"; return false; }
+                detail = "Global\\HWiNFO_SENS_SM2 is active"; return true;
+            }
+            finally { if (view != IntPtr.Zero) UnmapViewOfFile(view); CloseHandle(mapping); }
+        }
+
         public List<SensorReading> Read(out string status)
         {
             List<SensorReading> result = new List<SensorReading>();
