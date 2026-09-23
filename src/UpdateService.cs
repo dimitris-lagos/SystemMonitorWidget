@@ -17,7 +17,7 @@ namespace VegaDesktopWidget
     internal static class UpdateService
     {
         private const string LatestApi = "https://api.github.com/repos/dimitris-lagos/SystemMonitorWidget/releases/latest";
-        private static readonly string[] PackageFiles = { "SystemMonitorWidget.FanHelper.exe", "SystemMonitorWidget.HWiNFORestartHelper.exe", "OpenHardwareMonitorLib.dll", "OpenHardwareMonitor-License.html" };
+        private static readonly string[] PackageFiles = { "OpenHardwareMonitor-License.html" };
         private static int checking;
 
         [DataContract]

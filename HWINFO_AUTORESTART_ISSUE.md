@@ -22,8 +22,8 @@
 ## Υλοποίηση
 
 - Προστέθηκε ξεχωριστό `SystemMonitorWidget.HWiNFORestartHelper.exe` με administrator manifest.
-- Ο helper είναι επίσης embedded στο κύριο EXE, ώστε αναβαθμίσεις από παλιότερο τετραμελές package να μπορούν να τον εξαγάγουν αυτόματα στο local application data.
-- Το widget κρατά αναλυτικό log στο `%LOCALAPPDATA%\VegaDesktopWidget\HWiNFO-autorestart.log` και δεν καταπίνει πλέον τις αποτυχίες του uptime/restart.
+- Και οι δύο administrator helpers, μαζί με το OpenHardwareMonitor dependency του fan helper, είναι embedded στο κύριο EXE και εξάγονται με έλεγχο SHA-256 στο `%LOCALAPPDATA%\SystemMonitorWidget\Runtime\<version>`.
+- Το widget κρατά αναλυτικό log στο `%LOCALAPPDATA%\SystemMonitorWidget\HWiNFO-autorestart.log` και δεν καταπίνει πλέον τις αποτυχίες του uptime/restart.
 - Το autorestart ενεργοποιείται στις 11 ώρες και 30 λεπτά uptime, όταν δεν τρέχει HWiNFO, ή όταν το shared memory λείπει συνεχόμενα για δύο λεπτά.
 - Ο helper τερματίζει όλα τα HWiNFO32/64 processes, ξεκινά το ρυθμισμένο executable και περιμένει έως 45 δευτερόλεπτα για νέο process και ενεργό `Global\HWiNFO_SENS_SM2`.
 - Το widget κάνει δεύτερη, ανεξάρτητη επιβεβαίωση πριν δηλώσει επιτυχημένο restart.

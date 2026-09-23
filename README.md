@@ -42,12 +42,12 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Network speeds above 1023 KB/s are displayed in MB/s, including recorded minimum and maximum values.
 - Optional Super I/O fan control with automatic channel detection through the bundled OpenHardwareMonitor library.
 - Optional HWiNFO32/64 autorestart after 11 hours and 30 minutes of process uptime, plus automatic recovery when shared memory remains unavailable for two minutes.
-- HWiNFO restarts run through a separate administrator helper and count as successful only after a new process and active shared memory are verified; the main EXE contains a fallback copy of the helper for upgrades from older releases, and detailed attempts are written to `%LOCALAPPDATA%\VegaDesktopWidget\HWiNFO-autorestart.log`.
+- HWiNFO restarts run through an administrator helper embedded in the main EXE and count as successful only after a new process and active shared memory are verified; detailed attempts are written to `%LOCALAPPDATA%\SystemMonitorWidget\HWiNFO-autorestart.log`.
 - Portable and installed HWiNFO32/64 detection beside the widget first, then in the default Program Files locations, with an editable path shared by autostart and autorestart.
 - Four-point interactive fan curves bound to any live HWiNFO temperature sensor.
 - Each control can be paired with a live Super I/O RPM sensor; matching control/fan indices are paired automatically after scanning.
 - Per-channel minimum output and missing-sensor fail-safe output.
-- Fan writes run in a separate administrator helper; closing the widget restores each controlled channel to firmware/default mode.
+- Fan writes run in an administrator helper embedded in the main EXE; closing the widget restores each controlled channel to firmware/default mode.
 - Apply validates and saves changes without closing Configure; OK applies and closes.
 - Existing dashboard settings are migrated automatically for the new system section, compact network graphs, colors, and hardware-derived section titles.
 
@@ -79,11 +79,13 @@ HWiNFO is a separate application and is not bundled with this repository or its 
 
 ## Updates
 
-When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the five application files in the same folder and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
+When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the main EXE and license and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
+
+The v2.6.4 ZIP still includes the former fan helper and OpenHardwareMonitor library as one-release compatibility files because the v2.6.3 updater requires them. The v2.6.4 EXE extracts verified embedded runtime copies and removes those external files after startup. Later packages can contain only the main EXE and license.
 
 If the installation folder is protected, Windows may ask for administrator approval. If an application file remains locked, the update stops and restores previous files where possible. Network failures are silent during startup; use **Check for updates…** to see the error.
 
-Windows Vista does not support the TLS 1.2 connection needed for GitHub release downloads, so its built-in update check is unavailable. Download the latest ZIP manually on another supported system and copy the five files over after closing the widget.
+Windows Vista does not support the TLS 1.2 connection needed for GitHub release downloads, so its built-in update check is unavailable. Download the latest ZIP manually on another supported system and extract all included files after closing the widget.
 
 
 ## Build from source
@@ -98,12 +100,12 @@ The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.
 
 ## Local data
 
-Widget settings and the HWiNFO autorestart diagnostic log stay in the current Windows user's local application-data folder. The repository contains no exported sensor logs, local settings, or user-specific paths.
+Widget settings, embedded runtime files, and the HWiNFO autorestart diagnostic log stay in `%LOCALAPPDATA%\SystemMonitorWidget`. Version 2.6.4 copies all existing data from `%LOCALAPPDATA%\VegaDesktopWidget` and deletes the legacy folder only after the migration is verified. The repository contains no exported sensor logs, local settings, or user-specific paths.
 
 ## Quick start
 
 1. Download `SystemMonitorWidget-v2.6.4-win-x64.zip` from the [latest release](../../releases/latest).
-2. Extract all five files into the same folder.
+2. Extract all four files into the same folder. The two legacy runtime files are removed after the first successful start.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
 5. Run `SystemMonitorWidget-v2.6.4.exe`.

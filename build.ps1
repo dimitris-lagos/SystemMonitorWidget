@@ -22,6 +22,7 @@ New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $files = @(
     'Program.cs',
+    'EmbeddedSupportFiles.cs',
     'UpdateService.cs',
     'HWiNFOReader.cs',
     'PhysicalMemory.cs',
@@ -49,17 +50,6 @@ $files = @(
     (Join-Path $source 'Properties\AssemblyInfo.cs')
 if ($LASTEXITCODE -ne 0) { throw "HWiNFO restart helper compilation failed with exit code $LASTEXITCODE" }
 
-& $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$executable" `
-    "/win32icon:$icon" `
-    "/resource:$hwinfoRestartHelper,VegaDesktopWidget.HWiNFORestartHelper.exe" `
-    /reference:System.dll `
-    /reference:System.Core.dll `
-    /reference:System.Drawing.dll `
-    /reference:System.Windows.Forms.dll `
-    /reference:System.Runtime.Serialization.dll `
-    $files
-if ($LASTEXITCODE -ne 0) { throw "Widget compilation failed with exit code $LASTEXITCODE" }
-
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$helper" `
     "/win32manifest:$(Join-Path $source 'FanControlHelper.manifest')" `
     /reference:System.dll `
@@ -69,12 +59,27 @@ if ($LASTEXITCODE -ne 0) { throw "Widget compilation failed with exit code $LAST
     (Join-Path $source 'Properties\AssemblyInfo.cs')
 if ($LASTEXITCODE -ne 0) { throw "Fan helper compilation failed with exit code $LASTEXITCODE" }
 
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ "/out:$executable" `
+    "/win32icon:$icon" `
+    "/resource:$hwinfoRestartHelper,VegaDesktopWidget.HWiNFORestartHelper.exe" `
+    "/resource:$helper,VegaDesktopWidget.FanHelper.exe" `
+    "/resource:$ohmLibrary,VegaDesktopWidget.OpenHardwareMonitorLib.dll" `
+    /reference:System.dll `
+    /reference:System.Core.dll `
+    /reference:System.Drawing.dll `
+    /reference:System.Windows.Forms.dll `
+    /reference:System.Runtime.Serialization.dll `
+    $files
+if ($LASTEXITCODE -ne 0) { throw "Widget compilation failed with exit code $LASTEXITCODE" }
+
 $bundledLibrary = Join-Path $output 'OpenHardwareMonitorLib.dll'
 $bundledLicense = Join-Path $output 'OpenHardwareMonitor-License.html'
 Copy-Item -LiteralPath $ohmLibrary -Destination $bundledLibrary -Force
 Copy-Item -LiteralPath $ohmLicense -Destination $bundledLicense -Force
 if (Test-Path -LiteralPath $bundle) { Remove-Item -LiteralPath $bundle -Force }
-Compress-Archive -LiteralPath $executable, $helper, $hwinfoRestartHelper, $bundledLibrary, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
+# v2.6.4 keeps the legacy fan helper and library in the ZIP so the v2.6.3 updater can install it.
+# The v2.6.4 application uses the embedded copies and removes these bridge files after first launch.
+Compress-Archive -LiteralPath $executable, $helper, $bundledLibrary, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
 $bundleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundle).Hash
 [IO.File]::WriteAllText($checksum, $bundleHash + '  ' + [IO.Path]::GetFileName($bundle) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 Get-Item -LiteralPath $executable, $helper, $hwinfoRestartHelper, $bundledLibrary, $bundledLicense, $bundle, $checksum

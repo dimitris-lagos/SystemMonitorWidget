@@ -28,8 +28,42 @@ namespace VegaDesktopWidget
         public Dictionary<string, string> RoleLabels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public List<DashboardItem> Dashboard3 = new List<DashboardItem>(), Dashboard4 = new List<DashboardItem>();
         public int DashboardRows3 = DashboardDefaults.Rows, DashboardRows4 = DashboardDefaults.Rows;
-        public static string Folder { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VegaDesktopWidget"); } }
+        public static string Folder { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SystemMonitorWidget"); } }
+        public static string LegacyFolder { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VegaDesktopWidget"); } }
         public static string FilePath { get { return Path.Combine(Folder, "settings.ini"); } }
+
+        public static void MigrateLegacyStorage()
+        {
+            try { MigrateDirectory(LegacyFolder, Folder); }
+            catch (Exception ex)
+            {
+                try { Directory.CreateDirectory(Folder); File.AppendAllText(Path.Combine(Folder, "migration-error.log"), DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + ex + Environment.NewLine); }
+                catch { }
+            }
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run"))
+                {
+                    object legacy = key.GetValue("VegaDesktopWidget");
+                    if (legacy != null && key.GetValue("SystemMonitorWidget") == null) key.SetValue("SystemMonitorWidget", legacy);
+                    if (legacy != null) key.DeleteValue("VegaDesktopWidget", false);
+                }
+            }
+            catch { }
+        }
+
+        internal static void MigrateDirectory(string source, string destination)
+        {
+            if (!Directory.Exists(source) || String.Equals(Path.GetFullPath(source).TrimEnd('\\'), Path.GetFullPath(destination).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return;
+            Directory.CreateDirectory(destination); string sourceRoot = Path.GetFullPath(source).TrimEnd('\\') + "\\";
+            foreach (string directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories)) Directory.CreateDirectory(Path.Combine(destination, Path.GetFullPath(directory).Substring(sourceRoot.Length)));
+            foreach (string file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetFullPath(file).Substring(sourceRoot.Length), target = Path.Combine(destination, relative); Directory.CreateDirectory(Path.GetDirectoryName(target)); File.Copy(file, target, true);
+                if (!File.Exists(target) || new FileInfo(target).Length != new FileInfo(file).Length) throw new IOException("Migration verification failed for " + relative);
+            }
+            Directory.Delete(source, true);
+        }
 
         public string Label(string key, string fallback)
         {
@@ -206,7 +240,7 @@ namespace VegaDesktopWidget
         }
         private static bool IsVersionedDefaultHeaderTitle(string value) { Version version; const string prefix = "SYSTEM MONITOR v"; return value != null && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && Version.TryParse(value.Substring(prefix.Length), out version); }
         public void SetDashboardRows(int columns, int rows) { if (columns == 3) DashboardRows3 = rows; else DashboardRows4 = rows; }
-        public static bool IsStartupEnabled() { using (RegistryKey k = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", false)) return k != null && k.GetValue("VegaDesktopWidget") != null; }
-        public static void SetStartup(bool enabled) { using (RegistryKey k = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")) { if (enabled) k.SetValue("VegaDesktopWidget", "\"" + System.Windows.Forms.Application.ExecutablePath + "\""); else k.DeleteValue("VegaDesktopWidget", false); } }
+        public static bool IsStartupEnabled() { using (RegistryKey k = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", false)) return k != null && k.GetValue("SystemMonitorWidget") != null; }
+        public static void SetStartup(bool enabled) { using (RegistryKey k = Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")) { if (enabled) k.SetValue("SystemMonitorWidget", "\"" + System.Windows.Forms.Application.ExecutablePath + "\""); else k.DeleteValue("SystemMonitorWidget", false); k.DeleteValue("VegaDesktopWidget", false); } }
     }
 }

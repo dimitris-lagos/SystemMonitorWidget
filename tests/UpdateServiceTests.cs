@@ -22,11 +22,13 @@ internal static class UpdateServiceTests
     {
         if (args.Length != 3) throw new ArgumentException("Expected widget EXE, release ZIP, and output root.");
         string executable = Path.GetFullPath(args[0]);
-        using (Stream embedded = Assembly.LoadFrom(executable).GetManifestResourceStream("VegaDesktopWidget.HWiNFORestartHelper.exe"))
+        Assembly widgetAssembly = Assembly.LoadFrom(executable);
+        foreach (string resourceName in new string[] { "VegaDesktopWidget.HWiNFORestartHelper.exe", "VegaDesktopWidget.FanHelper.exe", "VegaDesktopWidget.OpenHardwareMonitorLib.dll" })
         {
-            if (embedded == null || embedded.Length < 4096 || embedded.ReadByte() != 'M' || embedded.ReadByte() != 'Z') throw new Exception("Embedded HWiNFO restart helper is missing or invalid.");
-            Console.WriteLine("EmbeddedRestartHelper=PASS");
+            using (Stream embedded = widgetAssembly.GetManifestResourceStream(resourceName))
+                if (embedded == null || embedded.Length < 4096 || embedded.ReadByte() != 'M' || embedded.ReadByte() != 'Z') throw new Exception("Embedded runtime file is missing or invalid: " + resourceName);
         }
+        Console.WriteLine("EmbeddedRuntimeFiles=PASS");
         string zip = Path.GetFullPath(args[1]);
         string root = Path.Combine(Path.GetFullPath(args[2]), "update-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -37,7 +39,7 @@ internal static class UpdateServiceTests
         MethodInfo apply = type.GetMethod("InstallFiles", BindingFlags.Static | BindingFlags.NonPublic);
         string versioned = Path.GetFileName(executable);
         Invoke(extract, zip, stage, versioned);
-        string[] files = { versioned, "SystemMonitorWidget.FanHelper.exe", "SystemMonitorWidget.HWiNFORestartHelper.exe", "OpenHardwareMonitorLib.dll", "OpenHardwareMonitor-License.html" };
+        string[] files = { versioned, "OpenHardwareMonitor-License.html" };
         foreach (string name in files) if (!File.Exists(Path.Combine(stage, name))) throw new Exception("Missing extracted file: " + name);
         Console.WriteLine("ExtractedFiles=" + files.Length);
         string target = Path.Combine(install, "InstalledWidget.exe");

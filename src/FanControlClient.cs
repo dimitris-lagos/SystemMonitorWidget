@@ -127,9 +127,7 @@ namespace VegaDesktopWidget
 
         private void EnsureConnected()
         {
-            if (IsConnected) return; CloseConnection(); string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            string helperPath = Path.Combine(baseDirectory, "SystemMonitorWidget.FanHelper.exe");
-            if (!File.Exists(helperPath)) throw new FileNotFoundException("Fan helper is missing.", helperPath);
+            if (IsConnected) return; CloseConnection(); string helperPath = EmbeddedSupportFiles.FanHelperPath(), baseDirectory = Path.GetDirectoryName(helperPath);
             string pipeName = "SystemMonitorWidget.Fan." + Guid.NewGuid().ToString("N"), token = Guid.NewGuid().ToString("N");
             ProcessStartInfo start = new ProcessStartInfo { FileName = helperPath, Arguments = "--pipe " + pipeName + " --token " + token, UseShellExecute = true, Verb = "runas", WorkingDirectory = baseDirectory };
             try { helper = Process.Start(start); } catch (System.ComponentModel.Win32Exception ex) { throw new InvalidOperationException(ex.NativeErrorCode == 1223 ? "Administrator approval was cancelled." : "Could not start elevated fan helper: " + ex.Message); }

@@ -567,7 +567,7 @@ namespace VegaDesktopWidget
                 bool success = false; string message = "HWiNFO restart failed";
                 try
                 {
-                    string helper = ResolveHWiNFORestartHelperPath();
+                    string helper = EmbeddedSupportFiles.HWiNFORestartHelperPath();
                     Directory.CreateDirectory(WidgetConfig.Folder); string resultPath = Path.Combine(WidgetConfig.Folder, "HWiNFO-restart-" + Guid.NewGuid().ToString("N") + ".result");
                     try
                     {
@@ -599,27 +599,6 @@ namespace VegaDesktopWidget
         }
 
         private static string QuoteArgument(string value) { return "\"" + (value ?? "").Replace("\"", "\\\"") + "\""; }
-
-        private static string ResolveHWiNFORestartHelperPath()
-        {
-            const string fileName = "SystemMonitorWidget.HWiNFORestartHelper.exe";
-            string packaged = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName); if (File.Exists(packaged)) return packaged;
-            Directory.CreateDirectory(WidgetConfig.Folder); string extracted = Path.Combine(WidgetConfig.Folder, fileName);
-            Version expected = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            try { if (File.Exists(extracted) && FileVersionInfo.GetVersionInfo(extracted).FileVersion == expected.ToString()) return extracted; }
-            catch { }
-            string temporary = extracted + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                using (Stream resource = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("VegaDesktopWidget.HWiNFORestartHelper.exe"))
-                {
-                    if (resource == null) throw new FileNotFoundException("The embedded HWiNFO restart helper is missing.");
-                    using (FileStream output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)) resource.CopyTo(output);
-                }
-                File.Copy(temporary, extracted, true); return extracted;
-            }
-            finally { try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
-        }
 
         private void LaunchHWiNFO()
         {
