@@ -16,7 +16,7 @@ namespace VegaDesktopWidget
         private readonly HashSet<string> activeControls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private DateTime lastFullWrite = DateTime.MinValue;
         private DateTime nextAutomaticRetryUtc = DateTime.MinValue;
-        private bool automaticRetryBlocked;
+        private bool automaticRetryBlocked, hasAppliedControl;
         private volatile string status = "Fan control off";
         public string Status { get { return status; } private set { status = value; } }
         public bool IsConnected { get { return pipe != null && pipe.IsConnected; } }
@@ -52,6 +52,7 @@ namespace VegaDesktopWidget
             {
                 List<FanProfile> configured = new List<FanProfile>(); if (profiles != null) foreach (FanProfile profile in profiles) if (profile.Enabled) configured.Add(profile);
                 if (!enabled || configured.Count == 0) { if (IsConnected) RestoreAllAndStop(); else Status = "Fan control off"; return; }
+                if (!hasAppliedControl && !TemperaturesReady(configured, readings)) { Status = "Fan control waiting for temperature sensors"; return; }
                 if (!IsConnected && (automaticRetryBlocked || DateTime.UtcNow < nextAutomaticRetryUtc)) return;
                 try
                 {
@@ -71,13 +72,14 @@ namespace VegaDesktopWidget
                     List<string> restore = new List<string>(); foreach (string id in activeControls) if (!wanted.Contains(id)) restore.Add(id);
                     foreach (string id in restore) { EnsureOk(Request("DEFAULT|" + Encode(id))); activeControls.Remove(id); lastApplied.Remove(id); }
                     if (DateTime.UtcNow - lastFullWrite > TimeSpan.FromSeconds(30)) lastFullWrite = DateTime.UtcNow;
+                    hasAppliedControl = true;
                     Status = "Fan control live · " + configured.Count + " channel" + (configured.Count == 1 ? "" : "s");
                 }
-                catch (Exception ex) { automaticRetryBlocked = ex.Message.IndexOf("cancelled", StringComparison.OrdinalIgnoreCase) >= 0; nextAutomaticRetryUtc = DateTime.UtcNow.AddMinutes(2); CloseConnection(); Status = "Fan control error · " + ex.Message + (automaticRetryBlocked ? " · open Configure and select OK to retry" : " · retry in 2 min"); }
+                catch (Exception ex) { automaticRetryBlocked = ex.Message.IndexOf("cancelled", StringComparison.OrdinalIgnoreCase) >= 0; nextAutomaticRetryUtc = DateTime.UtcNow.AddMinutes(2); hasAppliedControl = false; CloseConnection(); Status = "Fan control error · " + ex.Message + (automaticRetryBlocked ? " · open Configure and select OK to retry" : " · retry in 2 min"); }
             }
         }
 
-        public void PrepareConfigurationApply() { lock (sync) { automaticRetryBlocked = false; nextAutomaticRetryUtc = DateTime.MinValue; } }
+        public void PrepareConfigurationApply() { lock (sync) { automaticRetryBlocked = false; nextAutomaticRetryUtc = DateTime.MinValue; hasAppliedControl = false; } }
 
         public void RestoreAllAndStop()
         {
@@ -85,7 +87,7 @@ namespace VegaDesktopWidget
             {
                 try { if (IsConnected) { EnsureOk(Request("DEFAULTALL")); Request("EXIT"); } }
                 catch { }
-                CloseConnection(); activeControls.Clear(); lastApplied.Clear(); Status = "Fan control off · BIOS/default restored";
+                CloseConnection(); activeControls.Clear(); lastApplied.Clear(); hasAppliedControl = false; Status = "Fan control off · BIOS/default restored";
             }
         }
 
@@ -148,6 +150,16 @@ namespace VegaDesktopWidget
         {
             if (readings == null) return null; SensorReading exact = readings.Find(delegate(SensorReading r) { return r.Key.Equals(profile.TemperatureSensorKey, StringComparison.OrdinalIgnoreCase); }); if (exact != null) return exact;
             return readings.Find(delegate(SensorReading r) { bool label = r.Label.Equals(profile.TemperatureSensorLabel, StringComparison.OrdinalIgnoreCase) || r.OriginalLabel.Equals(profile.TemperatureSensorLabel, StringComparison.OrdinalIgnoreCase); return label && (profile.TemperatureSensorName.Length == 0 || r.SensorName.Equals(profile.TemperatureSensorName, StringComparison.OrdinalIgnoreCase)); });
+        }
+        private static bool TemperaturesReady(List<FanProfile> profiles, List<SensorReading> readings)
+        {
+            if (profiles == null || profiles.Count == 0) return false;
+            foreach (FanProfile profile in profiles)
+            {
+                SensorReading source = ResolveTemperature(profile, readings);
+                if (source == null || Double.IsNaN(source.Value) || Double.IsInfinity(source.Value) || source.Value < -20 || source.Value > 130) return false;
+            }
+            return true;
         }
         private static string Encode(string value) { return Uri.EscapeDataString(value ?? ""); }
         private static string Decode(string value) { try { return Uri.UnescapeDataString(value ?? ""); } catch { return value ?? ""; } }

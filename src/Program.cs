@@ -18,7 +18,6 @@ namespace VegaDesktopWidget
             using (Mutex singleInstance = new Mutex(true, "Local\\VegaDesktopWidget", out created))
             {
                 if (!created) return;
-                WidgetConfig.MigrateLegacyStorage();
                 try { EmbeddedSupportFiles.PrepareAndCleanLegacyInstallFiles(); }
                 catch (Exception ex)
                 {

@@ -47,6 +47,7 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Four-point interactive fan curves bound to any live HWiNFO temperature sensor.
 - Each control can be paired with a live Super I/O RPM sensor; matching control/fan indices are paired automatically after scanning.
 - Per-channel minimum output and missing-sensor fail-safe output.
+- On startup, fan outputs remain untouched until every enabled curve has a valid temperature reading; the configured fail-safe remains active for sensor loss after control starts.
 - Fan writes run in an administrator helper embedded in the main EXE; closing the widget restores each controlled channel to firmware/default mode.
 - Apply validates and saves changes without closing Configure; OK applies and closes.
 - Existing dashboard settings are migrated automatically for the new system section, compact network graphs, colors, and hardware-derived section titles.
@@ -81,7 +82,7 @@ HWiNFO is a separate application and is not bundled with this repository or its 
 
 When a newer stable release is available, choose **Yes** to download the complete ZIP and verify its published SHA-256 checksum. The widget closes normally (returning fan channels to firmware control), then a temporary updater replaces the main EXE and license and restarts it. The running EXE keeps its filename, but its internal version changes. Settings in local application data are not replaced.
 
-The v2.6.4 ZIP still includes the former fan helper and OpenHardwareMonitor library as one-release compatibility files because the v2.6.3 updater requires them. The v2.6.4 EXE extracts verified embedded runtime copies and removes those external files after startup. Later packages can contain only the main EXE and license.
+The release ZIP contains only the main EXE and the OpenHardwareMonitor license. Runtime helpers and the OpenHardwareMonitor library are embedded in the EXE and extracted as verified, versioned runtime files when needed.
 
 If the installation folder is protected, Windows may ask for administrator approval. If an application file remains locked, the update stops and restores previous files where possible. Network failures are silent during startup; use **Check for updates…** to see the error.
 
@@ -96,17 +97,17 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.4-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.5-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
-Widget settings, embedded runtime files, and the HWiNFO autorestart diagnostic log stay in `%LOCALAPPDATA%\SystemMonitorWidget`. Version 2.6.4 copies all existing data from `%LOCALAPPDATA%\VegaDesktopWidget` and deletes the legacy folder only after the migration is verified. The repository contains no exported sensor logs, local settings, or user-specific paths.
+Widget settings, embedded runtime files, and the HWiNFO autorestart diagnostic log stay in `%LOCALAPPDATA%\SystemMonitorWidget`. The repository contains no exported sensor logs, local settings, or user-specific paths.
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.6.4-win-x64.zip` from the [latest release](../../releases/latest).
-2. Extract all four files into the same folder. The two legacy runtime files are removed after the first successful start.
+1. Download `SystemMonitorWidget-v2.6.5-win-x64.zip` from the [latest release](../../releases/latest).
+2. Extract the EXE and license into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.6.4.exe`.
+5. Run `SystemMonitorWidget-v2.6.5.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

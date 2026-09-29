@@ -56,7 +56,33 @@ internal static class WidgetWorkersTests
             IList fresh = (IList)safeReadings.Invoke(null, new object[] { sample, now, 5000, now });
             IList stale = (IList)safeReadings.Invoke(null, new object[] { sample, now.AddSeconds(-6), 5000, now });
             if (fresh.Count != 1 || stale.Count != 0) throw new Exception("Stale-temperature fail-safe contract failed.");
-            Console.WriteLine("IndependentWorkers=PASS SensorSnapshot=PASS StaleTemperatureFailSafe=PASS");
+
+            object startupProfile = Activator.CreateInstance(profileType, true);
+            profileType.GetField("Enabled").SetValue(startupProfile, true);
+            profileType.GetField("ControlId").SetValue(startupProfile, "/lpc/fan/0");
+            profileType.GetField("TemperatureSensorKey").SetValue(startupProfile, "00000001:00000000:00000002");
+            IList startupProfiles = (IList)Activator.CreateInstance(listType); startupProfiles.Add(startupProfile);
+            IList startupReadings = (IList)Activator.CreateInstance(readingListType);
+            MethodInfo temperaturesReady = clientType.GetMethod("TemperaturesReady", BindingFlags.Static | BindingFlags.NonPublic);
+            if ((bool)temperaturesReady.Invoke(null, new object[] { startupProfiles, startupReadings })) throw new Exception("Fan control must wait before the first valid temperature sample.");
+            Invoke(client, "Update", true, startupProfiles, startupReadings);
+            string startupStatus = (string)clientType.GetProperty("Status").GetValue(client, null);
+            bool startupConnected = (bool)clientType.GetProperty("IsConnected").GetValue(client, null);
+            if (startupConnected || !startupStatus.StartsWith("Fan control waiting", StringComparison.Ordinal)) throw new Exception("Startup fan control changed hardware before temperatures were ready.");
+
+            object startupReading = Activator.CreateInstance(readingType, true);
+            readingType.GetField("SensorId").SetValue(startupReading, (uint)1);
+            readingType.GetField("SensorInstance").SetValue(startupReading, (uint)0);
+            readingType.GetField("ReadingId").SetValue(startupReading, (uint)2);
+            readingType.GetField("Value").SetValue(startupReading, 42.0);
+            readingType.GetField("Label").SetValue(startupReading, "CPU");
+            readingType.GetField("OriginalLabel").SetValue(startupReading, "CPU");
+            readingType.GetField("SensorName").SetValue(startupReading, "CPU");
+            startupReadings.Add(startupReading);
+            if (!(bool)temperaturesReady.Invoke(null, new object[] { startupProfiles, startupReadings })) throw new Exception("A valid first temperature sample must release startup fan control.");
+            readingType.GetField("Value").SetValue(startupReading, Double.NaN);
+            if ((bool)temperaturesReady.Invoke(null, new object[] { startupProfiles, startupReadings })) throw new Exception("Invalid first temperatures must not release startup fan control.");
+            Console.WriteLine("IndependentWorkers=PASS SensorSnapshot=PASS StaleTemperatureFailSafe=PASS StartupFanHold=PASS");
         }
         finally
         {

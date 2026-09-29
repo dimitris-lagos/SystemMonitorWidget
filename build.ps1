@@ -5,13 +5,13 @@ $source = Join-Path $root 'src'
 $output = Join-Path $root 'artifacts'
 $thirdParty = Join-Path $root 'third_party\OpenHardwareMonitor'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$executable = Join-Path $output 'SystemMonitorWidget-v2.6.4.exe'
+$executable = Join-Path $output 'SystemMonitorWidget-v2.6.5.exe'
 $helper = Join-Path $output 'SystemMonitorWidget.FanHelper.exe'
 $hwinfoRestartHelper = Join-Path $output 'SystemMonitorWidget.HWiNFORestartHelper.exe'
 $ohmLibrary = Join-Path $thirdParty 'OpenHardwareMonitorLib.dll'
 $ohmLicense = Join-Path $thirdParty 'License.html'
-$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.4-win-x64.zip'
-$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.4-win-x64.sha256.txt'
+$bundle = Join-Path $output 'SystemMonitorWidget-v2.6.5-win-x64.zip'
+$checksum = Join-Path $output 'SystemMonitorWidget-v2.6.5-win-x64.sha256.txt'
 $icon = Join-Path $output 'SystemMonitorWidget.ico'
 $iconGenerator = Join-Path $root 'tools\Generate-Icon.ps1'
 
@@ -77,9 +77,8 @@ $bundledLicense = Join-Path $output 'OpenHardwareMonitor-License.html'
 Copy-Item -LiteralPath $ohmLibrary -Destination $bundledLibrary -Force
 Copy-Item -LiteralPath $ohmLicense -Destination $bundledLicense -Force
 if (Test-Path -LiteralPath $bundle) { Remove-Item -LiteralPath $bundle -Force }
-# v2.6.4 keeps the legacy fan helper and library in the ZIP so the v2.6.3 updater can install it.
-# The v2.6.4 application uses the embedded copies and removes these bridge files after first launch.
-Compress-Archive -LiteralPath $executable, $helper, $bundledLibrary, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
+# Runtime helpers and OpenHardwareMonitor are embedded in the main executable.
+Compress-Archive -LiteralPath $executable, $bundledLicense -DestinationPath $bundle -CompressionLevel Optimal
 $bundleHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $bundle).Hash
 [IO.File]::WriteAllText($checksum, $bundleHash + '  ' + [IO.Path]::GetFileName($bundle) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
 Get-Item -LiteralPath $executable, $helper, $hwinfoRestartHelper, $bundledLibrary, $bundledLicense, $bundle, $checksum
