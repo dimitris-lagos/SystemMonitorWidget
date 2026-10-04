@@ -47,7 +47,7 @@ A lightweight, modular Windows desktop hardware monitor powered by HWiNFO shared
 - Four-point interactive fan curves bound to any live HWiNFO temperature sensor.
 - Each control can be paired with a live Super I/O RPM sensor; matching control/fan indices are paired automatically after scanning.
 - Per-channel minimum output and missing-sensor fail-safe output.
-- On startup, fan outputs remain untouched until every enabled curve has a valid temperature reading; the configured fail-safe remains active for sensor loss after control starts.
+- On startup, fan outputs remain untouched until the first valid temperatures arrive, then the curves apply immediately. Temporary HWiNFO gaps retain that last valid reading during startup; after ten stable seconds, the normal stale-reading fail-safe resumes.
 - Fan writes run in an administrator helper embedded in the main EXE; closing the widget restores each controlled channel to firmware/default mode.
 - Apply validates and saves changes without closing Configure; OK applies and closes.
 - Existing dashboard settings are migrated automatically for the new system section, compact network graphs, colors, and hardware-derived section titles.
@@ -97,7 +97,7 @@ Run PowerShell from the repository root:
 .\build.ps1
 ```
 
-The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.5-win-x64.zip` and its SHA-256 checksum.
+The build writes the individual binaries plus `artifacts\SystemMonitorWidget-v2.6.6-win-x64.zip` and its SHA-256 checksum.
 
 ## Local data
 
@@ -105,9 +105,9 @@ Widget settings, embedded runtime files, and the HWiNFO autorestart diagnostic l
 
 ## Quick start
 
-1. Download `SystemMonitorWidget-v2.6.5-win-x64.zip` from the [latest release](../../releases/latest).
+1. Download `SystemMonitorWidget-v2.6.6-win-x64.zip` from the [latest release](../../releases/latest).
 2. Extract the EXE and license into the same folder.
 3. Open HWiNFO32/64 settings and enable **Shared Memory Support**.
 4. Start HWiNFO sensors.
-5. Run `SystemMonitorWidget-v2.6.5.exe`.
+5. Run `SystemMonitorWidget-v2.6.6.exe`.
 6. Select the header gear and choose **Configure dashboard** to edit the dashboard or configure fan curves.

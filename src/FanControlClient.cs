@@ -151,15 +151,18 @@ namespace VegaDesktopWidget
             if (readings == null) return null; SensorReading exact = readings.Find(delegate(SensorReading r) { return r.Key.Equals(profile.TemperatureSensorKey, StringComparison.OrdinalIgnoreCase); }); if (exact != null) return exact;
             return readings.Find(delegate(SensorReading r) { bool label = r.Label.Equals(profile.TemperatureSensorLabel, StringComparison.OrdinalIgnoreCase) || r.OriginalLabel.Equals(profile.TemperatureSensorLabel, StringComparison.OrdinalIgnoreCase); return label && (profile.TemperatureSensorName.Length == 0 || r.SensorName.Equals(profile.TemperatureSensorName, StringComparison.OrdinalIgnoreCase)); });
         }
-        private static bool TemperaturesReady(List<FanProfile> profiles, List<SensorReading> readings)
+        internal static bool TemperaturesReady(List<FanProfile> profiles, List<SensorReading> readings)
         {
             if (profiles == null || profiles.Count == 0) return false;
+            bool found = false;
             foreach (FanProfile profile in profiles)
             {
+                if (!profile.Enabled) continue;
+                found = true;
                 SensorReading source = ResolveTemperature(profile, readings);
                 if (source == null || Double.IsNaN(source.Value) || Double.IsInfinity(source.Value) || source.Value < -20 || source.Value > 130) return false;
             }
-            return true;
+            return found;
         }
         private static string Encode(string value) { return Uri.EscapeDataString(value ?? ""); }
         private static string Decode(string value) { try { return Uri.UnescapeDataString(value ?? ""); } catch { return value ?? ""; } }

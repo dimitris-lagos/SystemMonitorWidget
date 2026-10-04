@@ -145,10 +145,18 @@ namespace VegaDesktopWidget
         private List<SensorReading> readings = new List<SensorReading>();
         private DateTime readingsUtc = DateTime.MinValue;
         private int staleMilliseconds = 5000;
+        private DateTime startupReadySinceUtc = DateTime.MinValue;
+        private DateTime startupGraceUntilUtc = DateTime.MinValue;
+        private bool startupTemperaturesStable;
 
         internal static List<SensorReading> SafeReadings(List<SensorReading> current, DateTime sampledUtc, int maximumAgeMs, DateTime nowUtc)
         {
             return nowUtc - sampledUtc > TimeSpan.FromMilliseconds(maximumAgeMs) ? new List<SensorReading>() : current;
+        }
+
+        internal static List<SensorReading> SafeReadingsForState(List<SensorReading> current, DateTime sampledUtc, int maximumAgeMs, DateTime nowUtc, bool startupStable, DateTime startupGraceUntil)
+        {
+            return !startupStable && nowUtc < startupGraceUntil ? current : SafeReadings(current, sampledUtc, maximumAgeMs, nowUtc);
         }
 
         public FanCurveWorker(FanControlClient fanClient)
@@ -165,13 +173,27 @@ namespace VegaDesktopWidget
             {
                 enabled = isEnabled; profiles = copy; resetRetry = true;
                 staleMilliseconds = Math.Max(5000, refreshMilliseconds * 3);
+                startupReadySinceUtc = DateTime.MinValue; startupGraceUntilUtc = DateTime.MinValue; startupTemperaturesStable = false;
+                readings = new List<SensorReading>(); readingsUtc = DateTime.MinValue;
             }
             wake.Set();
         }
 
         public void PublishReadings(List<SensorReading> fresh)
         {
-            lock (gate) { readings = fresh ?? new List<SensorReading>(); readingsUtc = DateTime.UtcNow; }
+            lock (gate)
+            {
+                DateTime nowUtc = DateTime.UtcNow;
+                bool ready = FanControlClient.TemperaturesReady(profiles, fresh);
+                if (ready)
+                {
+                    if (readingsUtc == DateTime.MinValue) startupGraceUntilUtc = nowUtc.AddSeconds(90);
+                    readings = fresh; readingsUtc = nowUtc;
+                    if (startupReadySinceUtc == DateTime.MinValue) startupReadySinceUtc = nowUtc;
+                    else if (nowUtc - startupReadySinceUtc >= TimeSpan.FromSeconds(10)) startupTemperaturesStable = true;
+                }
+                else if (!startupTemperaturesStable) startupReadySinceUtc = DateTime.MinValue;
+            }
             wake.Set();
         }
 
@@ -197,7 +219,7 @@ namespace VegaDesktopWidget
                         if (stopping) return;
                         runEnabled = enabled; currentProfiles = profiles;
                         prepare = resetRetry; resetRetry = false;
-                        currentReadings = SafeReadings(readings, readingsUtc, staleMilliseconds, DateTime.UtcNow);
+                        currentReadings = SafeReadingsForState(readings, readingsUtc, staleMilliseconds, DateTime.UtcNow, startupTemperaturesStable, startupGraceUntilUtc);
                     }
                     try
                     {
